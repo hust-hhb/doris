@@ -81,6 +81,7 @@ Status BaseCompaction::execute_compact_impl() {
     }
 
     SCOPED_ATTACH_TASK(_mem_tracker);
+    SCOPED_ATTACH_TASK(_base_mem_tracker);
 
     // 2. do base compaction, merge rowsets
     int64_t permits = get_compaction_permits();

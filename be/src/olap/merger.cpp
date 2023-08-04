@@ -236,6 +236,9 @@ Status Merger::vertical_compact_one_group(
             stats_output->rowid_conversion->init_segment_map(
                     rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
         }
+        LOG(INFO) << "rowid_conversion contains rows "
+                  << stats_output->rowid_conversion->get_count() << " segment size "
+                  << segment_num_rows.size();
     }
 
     vectorized::Block block = tablet_schema->create_block(reader_params.return_columns);

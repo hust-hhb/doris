@@ -66,7 +66,10 @@ public:
         SCHEMA_CHANGE = 4, // Count the memory consumption of all SchemaChange tasks.
         CLONE = 5, // Count the memory consumption of all EngineCloneTask. Note: Memory that does not contain make/release snapshots.
         EXPERIMENTAL =
-                6 // Experimental memory statistics, usually inaccurate, used for debugging, and expect to add other types in the future.
+                6, // Experimental memory statistics, usually inaccurate, used for debugging, and expect to add other types in the future.
+        BASE_COMPACTION = 7,      // Count the memory consumption of Base consumption.
+        CUMULATIVE_COMPACTION = 8, // Count the memory consumption of Cumulative consumption.
+        ROWID_CONVERSION = 9       // Count the memory consumption of rowid conversion
     };
 
     struct TrackerLimiterGroup {

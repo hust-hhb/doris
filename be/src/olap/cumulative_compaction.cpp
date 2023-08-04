@@ -81,6 +81,7 @@ Status CumulativeCompaction::execute_compact_impl() {
     }
 
     SCOPED_ATTACH_TASK(_mem_tracker);
+    SCOPED_ATTACH_TASK(_cumulative_mem_tracker);
 
     // 3. do cumulative compaction, merge rowsets
     int64_t permits = get_compaction_permits();

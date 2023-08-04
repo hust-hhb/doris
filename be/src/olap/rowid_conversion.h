@@ -37,18 +37,21 @@ public:
 
     // resize segment rowid map to its rows num
     void init_segment_map(const RowsetId& src_rowset_id, const std::vector<uint32_t>& num_rows) {
+        SCOPED_ATTACH_TASK(_rowid_convert_mem_tracker);
         for (size_t i = 0; i < num_rows.size(); i++) {
             uint32_t id = _segments_rowid_map.size();
             _segment_to_id_map.emplace(std::pair<RowsetId, uint32_t> {src_rowset_id, i}, id);
             _id_to_segment_map.emplace_back(src_rowset_id, i);
             _segments_rowid_map.emplace_back(std::vector<std::pair<uint32_t, uint32_t>>(
                     num_rows[i], std::pair<uint32_t, uint32_t>(UINT32_MAX, UINT32_MAX)));
+            count += num_rows[i];
         }
     }
 
     // set dst rowset id
     void set_dst_rowset_id(const RowsetId& dst_rowset_id) { _dst_rowst_id = dst_rowset_id; }
     const RowsetId get_dst_rowset_id() { return _dst_rowst_id; }
+    size_t get_count() { return count; }
 
     // add row id to the map
     void add(const std::vector<RowLocation>& rss_row_ids,
@@ -130,6 +133,12 @@ private:
 
     // current rowid of dst segment
     std::uint32_t _cur_dst_segment_rowid = 0;
+
+    size_t count = 0;
+
+public:
+    // rowid conversion mem tracker
+    std::shared_ptr<MemTrackerLimiter> _rowid_convert_mem_tracker;
 };
 
 } // namespace doris
