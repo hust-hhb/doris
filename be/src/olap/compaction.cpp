@@ -70,7 +70,8 @@ Compaction::Compaction(const TabletSharedPtr& tablet, const std::string& label)
           _input_num_segments(0),
           _input_index_size(0),
           _state(CompactionState::INITED) {
-    _mem_tracker = std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::COMPACTION, label);
+    _other_mem_tracker =
+            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::OTHER_COMPACTION, label);
     _base_mem_tracker =
             std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::BASE_COMPACTION, label);
     _cumulative_mem_tracker = std::make_shared<MemTrackerLimiter>(

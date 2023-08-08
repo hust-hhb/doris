@@ -92,6 +92,8 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
     RETURN_IF_ERROR(reader.init(reader_params));
 
     if (reader_params.record_rowids) {
+        int64_t _mem_size = 0;
+        SCOPED_MEM_COUNT(&_mem_size);
         stats_output->rowid_conversion->set_dst_rowset_id(dst_rowset_writer->rowset_id());
         // init segment rowid map for rowid conversion
         std::vector<uint32_t> segment_num_rows;
@@ -100,6 +102,9 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
             stats_output->rowid_conversion->init_segment_map(
                     rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
         }
+        LOG(INFO) << "after init rowid conversion,consume " << _mem_size;
+        stats_output->rowid_conversion->_rowid_convert_mem_tracker->consume(_mem_size);
+        LOG(INFO) << "after init rowid" << doris::MemTrackerLimiter::log_process_usage_str();
     }
 
     vectorized::Block block = cur_tablet_schema->create_block(reader_params.return_columns);
@@ -228,6 +233,8 @@ Status Merger::vertical_compact_one_group(
     RETURN_IF_ERROR(reader.init(reader_params));
 
     if (reader_params.record_rowids) {
+        int64_t _mem_size = 0;
+        SCOPED_MEM_COUNT(&_mem_size);
         stats_output->rowid_conversion->set_dst_rowset_id(dst_rowset_writer->rowset_id());
         // init segment rowid map for rowid conversion
         std::vector<uint32_t> segment_num_rows;
@@ -236,9 +243,12 @@ Status Merger::vertical_compact_one_group(
             stats_output->rowid_conversion->init_segment_map(
                     rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
         }
+        LOG(INFO) << "after init rowid conversion,consume " << _mem_size;
+        stats_output->rowid_conversion->_rowid_convert_mem_tracker->consume(_mem_size);
         LOG(INFO) << "rowid_conversion contains rows "
                   << stats_output->rowid_conversion->get_count() << " segment size "
                   << segment_num_rows.size();
+        LOG(INFO) << "after init rowid" << doris::MemTrackerLimiter::log_process_usage_str();
     }
 
     vectorized::Block block = tablet_schema->create_block(reader_params.return_columns);

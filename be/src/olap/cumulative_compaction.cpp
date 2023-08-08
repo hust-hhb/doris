@@ -80,7 +80,6 @@ Status CumulativeCompaction::execute_compact_impl() {
         return Status::Error<CUMULATIVE_CLONE_OCCURRED>("get_clone_occurred failed");
     }
 
-    SCOPED_ATTACH_TASK(_mem_tracker);
     SCOPED_ATTACH_TASK(_cumulative_mem_tracker);
 
     // 3. do cumulative compaction, merge rowsets

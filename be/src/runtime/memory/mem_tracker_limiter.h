@@ -59,15 +59,15 @@ using TaskGroupPtr = std::shared_ptr<TaskGroup>;
 class MemTrackerLimiter final : public MemTracker {
 public:
     enum class Type {
-        GLOBAL = 0,        // Life cycle is the same as the process, e.g. Cache and default Orphan
-        QUERY = 1,         // Count the memory consumption of all Query tasks.
-        LOAD = 2,          // Count the memory consumption of all Load tasks.
-        COMPACTION = 3,    // Count the memory consumption of all Base and Cumulative tasks.
-        SCHEMA_CHANGE = 4, // Count the memory consumption of all SchemaChange tasks.
+        GLOBAL = 0,          // Life cycle is the same as the process, e.g. Cache and default Orphan
+        QUERY = 1,           // Count the memory consumption of all Query tasks.
+        LOAD = 2,            // Count the memory consumption of all Load tasks.
+        OTHER_COMPACTION = 3, // Count the memory consumption of Other consumption.
+        SCHEMA_CHANGE = 4,   // Count the memory consumption of all SchemaChange tasks.
         CLONE = 5, // Count the memory consumption of all EngineCloneTask. Note: Memory that does not contain make/release snapshots.
         EXPERIMENTAL =
                 6, // Experimental memory statistics, usually inaccurate, used for debugging, and expect to add other types in the future.
-        BASE_COMPACTION = 7,      // Count the memory consumption of Base consumption.
+        BASE_COMPACTION = 7,       // Count the memory consumption of Base consumption.
         CUMULATIVE_COMPACTION = 8, // Count the memory consumption of Cumulative consumption.
         ROWID_CONVERSION = 9       // Count the memory consumption of rowid conversion
     };
@@ -84,13 +84,19 @@ public:
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
                           {Type::LOAD,
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
-                          {Type::COMPACTION,
-                           std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
                           {Type::SCHEMA_CHANGE,
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
                           {Type::CLONE,
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
                           {Type::EXPERIMENTAL,
+                           std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
+                          {Type::OTHER_COMPACTION,
+                           std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
+                          {Type::BASE_COMPACTION,
+                           std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
+                          {Type::CUMULATIVE_COMPACTION,
+                           std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
+                          {Type::ROWID_CONVERSION,
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)}};
 
 public:
@@ -109,14 +115,20 @@ public:
             return "query";
         case Type::LOAD:
             return "load";
-        case Type::COMPACTION:
-            return "compaction";
         case Type::SCHEMA_CHANGE:
             return "schema_change";
         case Type::CLONE:
             return "clone";
         case Type::EXPERIMENTAL:
             return "experimental";
+        case Type::OTHER_COMPACTION:
+            return "other_compaction";
+        case Type::BASE_COMPACTION:
+            return "base_compaction";
+        case Type::CUMULATIVE_COMPACTION:
+            return "cumulative_compaction";
+        case Type::ROWID_CONVERSION:
+            return "rowid_conversion";
         default:
             LOG(FATAL) << "not match type of mem tracker limiter :" << static_cast<int>(type);
         }

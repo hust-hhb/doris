@@ -115,7 +115,7 @@ Status SingleReplicaCompaction::execute_compact_impl() {
         return Status::Error<BE_CLONE_OCCURRED>("get_clone_occurred failed");
     }
 
-    SCOPED_ATTACH_TASK(_mem_tracker);
+    SCOPED_ATTACH_TASK(_other_mem_tracker);
 
     // 2. do single replica compaction
     RETURN_IF_ERROR(_do_single_replica_compaction());

@@ -22,6 +22,7 @@
 
 #include "olap/olap_common.h"
 #include "olap/utils.h"
+#include "runtime/memory/mem_tracker_limiter.h"
 
 namespace doris {
 
@@ -37,7 +38,6 @@ public:
 
     // resize segment rowid map to its rows num
     void init_segment_map(const RowsetId& src_rowset_id, const std::vector<uint32_t>& num_rows) {
-        SCOPED_ATTACH_TASK(_rowid_convert_mem_tracker);
         for (size_t i = 0; i < num_rows.size(); i++) {
             uint32_t id = _segments_rowid_map.size();
             _segment_to_id_map.emplace(std::pair<RowsetId, uint32_t> {src_rowset_id, i}, id);
