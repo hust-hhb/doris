@@ -168,6 +168,9 @@ void mem_tracker_handler(const WebPageHandler::ArgumentMap& args, std::stringstr
         } else if (iter->second == "rowid_conversion") {
             MemTrackerLimiter::make_type_snapshots(&snapshots,
                                                    MemTrackerLimiter::Type::ROWID_CONVERSION);
+        } else if (iter->second == "process_block") {
+            MemTrackerLimiter::make_type_snapshots(&snapshots,
+                                                   MemTrackerLimiter::Type::PROCESS_BLOCK);
         }
     } else {
         (*output) << "<h4>*Note: (see documentation for details)</h4>\n";

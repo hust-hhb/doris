@@ -125,7 +125,8 @@ void MemTrackerLimiter::refresh_global_counter() {
             {Type::OTHER_COMPACTION, 0},
             {Type::BASE_COMPACTION, 0},
             {Type::CUMULATIVE_COMPACTION, 0},
-            {Type::ROWID_CONVERSION, 0}}; // No need refresh Type::EXPERIMENTAL
+            {Type::ROWID_CONVERSION, 0},
+            {Type::PROCESS_BLOCK, 0}}; // No need refresh Type::EXPERIMENTAL
     for (unsigned i = 0; i < mem_tracker_limiter_pool.size(); ++i) {
         std::lock_guard<std::mutex> l(mem_tracker_limiter_pool[i].group_lock);
         for (auto tracker : mem_tracker_limiter_pool[i].trackers) {

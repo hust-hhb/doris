@@ -104,6 +104,8 @@ protected:
     std::shared_ptr<MemTrackerLimiter> _base_mem_tracker;
     // cumulative compaction mem tracker
     std::shared_ptr<MemTrackerLimiter> _cumulative_mem_tracker;
+    // block mem tracker
+    std::shared_ptr<MemTrackerLimiter> _block_mem_tracker;
 
     TabletSharedPtr _tablet;
 

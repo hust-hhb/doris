@@ -78,6 +78,8 @@ Compaction::Compaction(const TabletSharedPtr& tablet, const std::string& label)
             MemTrackerLimiter::Type::CUMULATIVE_COMPACTION, label);
     _rowid_conversion._rowid_convert_mem_tracker =
             std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::ROWID_CONVERSION, label);
+    _block_mem_tracker =
+            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::PROCESS_BLOCK, label);
     init_profile(label);
 }
 
@@ -351,14 +353,18 @@ Status Compaction::do_compaction_impl(int64_t permits) {
     {
         SCOPED_TIMER(_merge_rowsets_latency_timer);
         if (vertical_compaction) {
-            res = Merger::vertical_merge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
-                                                 _input_rs_readers, _output_rs_writer.get(),
-                                                 get_avg_segment_rows(), &stats);
+            res = Merger::vertical_merge_rowsets(
+                    _tablet, compaction_type(), _cur_tablet_schema, _input_rs_readers,
+                    _output_rs_writer.get(), get_avg_segment_rows(), &stats, _block_mem_tracker);
         } else {
             res = Merger::vmerge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                          _input_rs_readers, _output_rs_writer.get(), &stats);
         }
     }
+    auto value = _block_mem_tracker->consumption();
+    _block_mem_tracker->release(value);
+    LOG(INFO) << "_block_mem_tracker release " << value << " after process merge_rowsets";
+//    LOG(INFO) << doris::MemTrackerLimiter::log_process_usage_str();
 
     if (!res.ok()) {
         LOG(WARNING) << "fail to do " << compaction_name() << ". res=" << res
@@ -488,10 +494,9 @@ Status Compaction::do_compaction_impl(int64_t permits) {
               << ", output_row_num=" << _output_rowset->num_rows()
               << ". elapsed time=" << watch.get_elapse_second()
               << "s. cumulative_compaction_policy=" << cumu_policy->name()
-              << ", compact_row_per_second=" << int(_input_row_num / watch.get_elapse_second());
-    LOG(INFO) << "release rowid conversion count " << _rowid_conversion.get_count();
-    LOG(INFO) << "after compaction" << doris::MemTrackerLimiter::log_process_usage_str();
-
+              << ", compact_row_per_second=" << int(_input_row_num / watch.get_elapse_second())
+              << "release rowid conversion count " << _rowid_conversion.get_count();
+//    LOG(INFO) << "after compaction" << doris::MemTrackerLimiter::log_process_usage_str();
     return Status::OK();
 }
 

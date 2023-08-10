@@ -69,7 +69,8 @@ public:
                 6, // Experimental memory statistics, usually inaccurate, used for debugging, and expect to add other types in the future.
         BASE_COMPACTION = 7,       // Count the memory consumption of Base consumption.
         CUMULATIVE_COMPACTION = 8, // Count the memory consumption of Cumulative consumption.
-        ROWID_CONVERSION = 9       // Count the memory consumption of rowid conversion
+        ROWID_CONVERSION = 9,       // Count the memory consumption of rowid conversion
+        PROCESS_BLOCK = 10         // Count the memory consumption of process block on compaction
     };
 
     struct TrackerLimiterGroup {
@@ -97,6 +98,8 @@ public:
                           {Type::CUMULATIVE_COMPACTION,
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
                           {Type::ROWID_CONVERSION,
+                           std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)},
+                          {Type::PROCESS_BLOCK,
                            std::make_shared<RuntimeProfile::HighWaterMarkCounter>(TUnit::BYTES)}};
 
 public:
@@ -129,6 +132,8 @@ public:
             return "cumulative_compaction";
         case Type::ROWID_CONVERSION:
             return "rowid_conversion";
+        case Type::PROCESS_BLOCK:
+            return "process_block";
         default:
             LOG(FATAL) << "not match type of mem tracker limiter :" << static_cast<int>(type);
         }
