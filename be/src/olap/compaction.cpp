@@ -330,7 +330,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
 
     LOG(INFO) << "start " << compaction_name() << ". tablet=" << _tablet->full_name()
               << ", output_version=" << _output_version << ", permits: " << permits;
-    LOG(INFO) << "before compaction" << doris::MemTrackerLimiter::log_process_usage_str();
+//    LOG(INFO) << "before compaction" << doris::MemTrackerLimiter::log_process_usage_str();
     bool vertical_compaction = should_vertical_compaction();
     RowsetWriterContext ctx;
     RETURN_IF_ERROR(construct_input_rowset_readers());
@@ -494,9 +494,13 @@ Status Compaction::do_compaction_impl(int64_t permits) {
               << ", output_row_num=" << _output_rowset->num_rows()
               << ". elapsed time=" << watch.get_elapse_second()
               << "s. cumulative_compaction_policy=" << cumu_policy->name()
-              << ", compact_row_per_second=" << int(_input_row_num / watch.get_elapse_second())
-              << "release rowid conversion count " << _rowid_conversion.get_count();
-//    LOG(INFO) << "after compaction" << doris::MemTrackerLimiter::log_process_usage_str();
+              << ", compact_row_per_second=" << int(_input_row_num / watch.get_elapse_second());
+    if (stats.rowid_conversion != nullptr) {
+        auto rowid_mem_value = stats.rowid_conversion->_rowid_convert_mem_tracker->consumption();
+        LOG(INFO) << "release rowid_conversion mem " << rowid_mem_value;
+        stats.rowid_conversion->_rowid_convert_mem_tracker->release(rowid_mem_value);
+    }
+    //    LOG(INFO) << "after compaction" << doris::MemTrackerLimiter::log_process_usage_str();
     return Status::OK();
 }
 

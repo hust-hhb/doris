@@ -249,11 +249,13 @@ Status Merger::vertical_compact_one_group(
                     rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
         }
     }
-    LOG(INFO) << "after init rowid conversion tablet " << tablet->get_table_id() << " type " << type
-              << " round " << i << " rows " << stats_output->rowid_conversion->get_count()
-              << " consume " << _rowid_mem_size;
-    stats_output->rowid_conversion->_rowid_convert_mem_tracker->consume(_rowid_mem_size);
-//    LOG(INFO) << "after init rowid" << doris::MemTrackerLimiter::log_process_usage_str();
+    if (reader_params.record_rowids) {
+        LOG(INFO) << "after init rowid conversion tablet " << tablet->get_table_id() << " type "
+                  << type << " round " << i << " rows "
+                  << stats_output->rowid_conversion->get_count() << " consume " << _rowid_mem_size;
+        stats_output->rowid_conversion->_rowid_convert_mem_tracker->consume(_rowid_mem_size);
+    }
+    //    LOG(INFO) << "after init rowid" << doris::MemTrackerLimiter::log_process_usage_str();
 
     vectorized::Block block = tablet_schema->create_block(reader_params.return_columns);
     size_t output_rows = 0;
