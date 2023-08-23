@@ -72,7 +72,14 @@ Compaction::Compaction(const TabletSharedPtr& tablet, const std::string& label)
           _input_index_size(0),
           _state(CompactionState::INITED),
           _allow_delete_in_cumu_compaction(config::enable_delete_when_cumu_compaction) {
-    _mem_tracker = std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::COMPACTION, label);
+    _other_mem_tracker =
+            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::OTHER_COMPACTION, label);
+    _base_mem_tracker =
+            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::BASE_COMPACTION, label);
+    _cumulative_mem_tracker = std::make_shared<MemTrackerLimiter>(
+            MemTrackerLimiter::Type::CUMULATIVE_COMPACTION, label);
+    _rowid_conversion.set_mem_tracker(
+            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::ROWID_CONVERSION, label));
     init_profile(label);
 }
 
@@ -504,7 +511,6 @@ Status Compaction::do_compaction_impl(int64_t permits) {
               << ". elapsed time=" << watch.get_elapse_second()
               << "s. cumulative_compaction_policy=" << cumu_policy->name()
               << ", compact_row_per_second=" << int(_input_row_num / watch.get_elapse_second());
-
     return Status::OK();
 }
 

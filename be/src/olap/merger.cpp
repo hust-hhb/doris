@@ -99,6 +99,8 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
             stats_output->rowid_conversion->init_segment_map(
                     rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
         }
+        auto _init_rowid_mem_size = stats_output->rowid_conversion->mem_size();
+        stats_output->rowid_conversion->get_mem_tracker()->consume(_init_rowid_mem_size);
     }
 
     vectorized::Block block = cur_tablet_schema->create_block(reader_params.return_columns);
@@ -234,6 +236,8 @@ Status Merger::vertical_compact_one_group(
             stats_output->rowid_conversion->init_segment_map(
                     rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
         }
+        auto _init_rowid_mem_size = stats_output->rowid_conversion->mem_size();
+        stats_output->rowid_conversion->get_mem_tracker()->consume(_init_rowid_mem_size);
     }
 
     vectorized::Block block = tablet_schema->create_block(reader_params.return_columns);

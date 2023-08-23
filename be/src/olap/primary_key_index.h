@@ -57,6 +57,8 @@ public:
               _disk_size(0),
               _seq_col_length(seq_col_length) {}
 
+    ~PrimaryKeyIndexBuilder();
+
     Status init();
 
     Status add_item(const Slice& key);
@@ -83,6 +85,10 @@ private:
     faststring _max_key;
     std::unique_ptr<segment_v2::IndexedColumnWriter> _primary_key_index_builder;
     std::unique_ptr<segment_v2::BloomFilterIndexWriter> _bloom_filter_index_builder;
+    // primary key index mem tracker
+    std::shared_ptr<MemTrackerLimiter> _primary_key_index_mem_tracker;
+    // bloom filter index mem tracker
+    std::shared_ptr<MemTrackerLimiter> _bloom_filter_index_mem_tracker;
 };
 
 class PrimaryKeyIndexReader {

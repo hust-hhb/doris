@@ -22,6 +22,7 @@
 
 #include "olap/olap_common.h"
 #include "olap/utils.h"
+#include "runtime/memory/mem_tracker_limiter.h"
 
 namespace doris {
 
@@ -33,10 +34,15 @@ namespace doris {
 class RowIdConversion {
 public:
     RowIdConversion() = default;
-    ~RowIdConversion() = default;
+    ~RowIdConversion() {
+        if (_rowid_convert_mem_tracker.get() != nullptr) {
+            _rowid_convert_mem_tracker->release(_rowid_convert_mem_tracker->consumption());
+        }
+    }
 
     // resize segment rowid map to its rows num
     void init_segment_map(const RowsetId& src_rowset_id, const std::vector<uint32_t>& num_rows) {
+        SCOPED_MEM_COUNT(&_mem_size);
         for (size_t i = 0; i < num_rows.size(); i++) {
             uint32_t id = _segments_rowid_map.size();
             _segment_to_id_map.emplace(std::pair<RowsetId, uint32_t> {src_rowset_id, i}, id);
@@ -109,6 +115,14 @@ public:
         return _segment_to_id_map.at(segment);
     }
 
+    int64_t mem_size() const { return _mem_size; }
+
+    void set_mem_tracker(std::shared_ptr<MemTrackerLimiter> mem_tracker) {
+        _rowid_convert_mem_tracker = mem_tracker;
+    }
+
+    std::shared_ptr<MemTrackerLimiter> get_mem_tracker() { return _rowid_convert_mem_tracker; }
+
 private:
     // the first level vector: index indicates src segment.
     // the second level vector: index indicates row id of source segment,
@@ -130,6 +144,11 @@ private:
 
     // current rowid of dst segment
     std::uint32_t _cur_dst_segment_rowid = 0;
+
+    int64_t _mem_size = 0;
+
+    // rowid conversion mem tracker
+    std::shared_ptr<MemTrackerLimiter> _rowid_convert_mem_tracker;
 };
 
 } // namespace doris
