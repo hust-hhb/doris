@@ -93,13 +93,17 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
     if (reader_params.record_rowids) {
         stats_output->rowid_conversion->set_dst_rowset_id(dst_rowset_writer->rowset_id());
         // init segment rowid map for rowid conversion
-        std::vector<uint32_t> segment_num_rows;
-        for (auto& rs_split : reader_params.rs_splits) {
-            RETURN_IF_ERROR(rs_split.rs_reader->get_segment_num_rows(&segment_num_rows));
-            stats_output->rowid_conversion->init_segment_map(
-                    rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
+        int64_t _init_rowid_mem_size = 0;
+        {
+            SCOPED_MEM_COUNT(&_init_rowid_mem_size);
+            std::vector<uint32_t> segment_num_rows;
+            for (auto& rs_split : reader_params.rs_splits) {
+                SCOPED_MEM_COUNT(&_init_rowid_mem_size);
+                RETURN_IF_ERROR(rs_split.rs_reader->get_segment_num_rows(&segment_num_rows));
+                stats_output->rowid_conversion->init_segment_map(
+                        rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
+            }
         }
-        auto _init_rowid_mem_size = stats_output->rowid_conversion->mem_size();
         stats_output->rowid_conversion->get_mem_tracker()->consume(_init_rowid_mem_size);
     }
 
@@ -230,13 +234,16 @@ Status Merger::vertical_compact_one_group(
     if (reader_params.record_rowids) {
         stats_output->rowid_conversion->set_dst_rowset_id(dst_rowset_writer->rowset_id());
         // init segment rowid map for rowid conversion
-        std::vector<uint32_t> segment_num_rows;
-        for (auto& rs_split : reader_params.rs_splits) {
-            RETURN_IF_ERROR(rs_split.rs_reader->get_segment_num_rows(&segment_num_rows));
-            stats_output->rowid_conversion->init_segment_map(
-                    rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
+        int64_t _init_rowid_mem_size = 0;
+        {
+            SCOPED_MEM_COUNT(&_init_rowid_mem_size);
+            std::vector<uint32_t> segment_num_rows;
+            for (auto& rs_split : reader_params.rs_splits) {
+                RETURN_IF_ERROR(rs_split.rs_reader->get_segment_num_rows(&segment_num_rows));
+                stats_output->rowid_conversion->init_segment_map(
+                        rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
+            }
         }
-        auto _init_rowid_mem_size = stats_output->rowid_conversion->mem_size();
         stats_output->rowid_conversion->get_mem_tracker()->consume(_init_rowid_mem_size);
     }
 
