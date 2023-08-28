@@ -93,18 +93,15 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
     if (reader_params.record_rowids) {
         stats_output->rowid_conversion->set_dst_rowset_id(dst_rowset_writer->rowset_id());
         // init segment rowid map for rowid conversion
-        int64_t _init_rowid_mem_size = 0;
         {
-            SCOPED_MEM_COUNT(&_init_rowid_mem_size);
+            SCOPED_CONSUME_MEM_TRACKER(stats_output->rowid_conversion->get_mem_tracker());
             std::vector<uint32_t> segment_num_rows;
             for (auto& rs_split : reader_params.rs_splits) {
-                SCOPED_MEM_COUNT(&_init_rowid_mem_size);
                 RETURN_IF_ERROR(rs_split.rs_reader->get_segment_num_rows(&segment_num_rows));
                 stats_output->rowid_conversion->init_segment_map(
                         rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
             }
         }
-        stats_output->rowid_conversion->get_mem_tracker()->consume(_init_rowid_mem_size);
     }
 
     vectorized::Block block = cur_tablet_schema->create_block(reader_params.return_columns);
@@ -194,7 +191,8 @@ Status Merger::vertical_compact_one_group(
         TabletSharedPtr tablet, ReaderType reader_type, TabletSchemaSPtr tablet_schema, bool is_key,
         const std::vector<uint32_t>& column_group, vectorized::RowSourcesBuffer* row_source_buf,
         const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
-        RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment, Statistics* stats_output) {
+        RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment, Statistics* stats_output,
+        std::shared_ptr<MemTracker> _process_block_mem_tracker) {
     // build tablet reader
     VLOG_NOTICE << "vertical compact one group, max_rows_per_segment=" << max_rows_per_segment;
     vectorized::VerticalBlockReader reader(row_source_buf);
@@ -234,9 +232,8 @@ Status Merger::vertical_compact_one_group(
     if (reader_params.record_rowids) {
         stats_output->rowid_conversion->set_dst_rowset_id(dst_rowset_writer->rowset_id());
         // init segment rowid map for rowid conversion
-        int64_t _init_rowid_mem_size = 0;
         {
-            SCOPED_MEM_COUNT(&_init_rowid_mem_size);
+            SCOPED_CONSUME_MEM_TRACKER(stats_output->rowid_conversion->get_mem_tracker());
             std::vector<uint32_t> segment_num_rows;
             for (auto& rs_split : reader_params.rs_splits) {
                 RETURN_IF_ERROR(rs_split.rs_reader->get_segment_num_rows(&segment_num_rows));
@@ -244,13 +241,14 @@ Status Merger::vertical_compact_one_group(
                         rs_split.rs_reader->rowset()->rowset_id(), segment_num_rows);
             }
         }
-        stats_output->rowid_conversion->get_mem_tracker()->consume(_init_rowid_mem_size);
     }
+    LOG(INFO) << "after init rowid" << doris::MemTrackerLimiter::log_process_usage_str();
 
     vectorized::Block block = tablet_schema->create_block(reader_params.return_columns);
     size_t output_rows = 0;
     bool eof = false;
     while (!eof && !StorageEngine::instance()->stopped()) {
+        SCOPED_CONSUME_MEM_TRACKER(_process_block_mem_tracker);
         // Read one block from block reader
         RETURN_NOT_OK_STATUS_WITH_WARN(
                 reader.next_block_with_aggregation(&block, &eof),
@@ -268,6 +266,8 @@ Status Merger::vertical_compact_one_group(
         output_rows += block.rows();
         block.clear_column_data();
     }
+    LOG(INFO) << "after process tablet " << tablet->get_tablet_info().tablet_id
+              << doris::MemTrackerLimiter::log_process_usage_str();
     if (StorageEngine::instance()->stopped()) {
         return Status::Error<INTERNAL_ERROR>("tablet {} failed to do compaction, engine stopped",
                                              tablet->full_name());
@@ -279,6 +279,8 @@ Status Merger::vertical_compact_one_group(
         stats_output->filtered_rows = reader.filtered_rows();
     }
     RETURN_IF_ERROR(dst_rowset_writer->flush_columns(is_key));
+    LOG(INFO) << "after flush tablet " << tablet->get_tablet_info().tablet_id
+              << doris::MemTrackerLimiter::log_process_usage_str();
 
     return Status::OK();
 }
@@ -344,11 +346,11 @@ Status Merger::vertical_compact_one_group(TabletSharedPtr tablet, ReaderType rea
 // 2. compact groups one by one, generate a row_source_buf when compact key group
 // and use this row_source_buf to compact value column groups
 // 3. build output rowset
-Status Merger::vertical_merge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
-                                      TabletSchemaSPtr tablet_schema,
-                                      const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
-                                      RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment,
-                                      Statistics* stats_output) {
+Status Merger::vertical_merge_rowsets(
+        TabletSharedPtr tablet, ReaderType reader_type, TabletSchemaSPtr tablet_schema,
+        const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
+        RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment, Statistics* stats_output,
+        std::shared_ptr<MemTracker> _process_block_mem_tracker) {
     LOG(INFO) << "Start to do vertical compaction, tablet_id: " << tablet->tablet_id();
     std::vector<std::vector<uint32_t>> column_groups;
     vertical_split_columns(tablet_schema, &column_groups);
@@ -361,7 +363,8 @@ Status Merger::vertical_merge_rowsets(TabletSharedPtr tablet, ReaderType reader_
         bool is_key = (i == 0);
         RETURN_IF_ERROR(vertical_compact_one_group(
                 tablet, reader_type, tablet_schema, is_key, column_groups[i], &row_sources_buf,
-                src_rowset_readers, dst_rowset_writer, max_rows_per_segment, stats_output));
+                src_rowset_readers, dst_rowset_writer, max_rows_per_segment, stats_output,
+                _process_block_mem_tracker));
         if (is_key) {
             row_sources_buf.flush();
         }
@@ -371,6 +374,8 @@ Status Merger::vertical_merge_rowsets(TabletSharedPtr tablet, ReaderType reader_
     // finish compact, build output rowset
     VLOG_NOTICE << "finish compact groups";
     RETURN_IF_ERROR(dst_rowset_writer->final_flush());
+    LOG(INFO) << "after final flush tablet " << tablet->get_table_id()
+              << doris::MemTrackerLimiter::log_process_usage_str();
 
     return Status::OK();
 }

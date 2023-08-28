@@ -101,12 +101,10 @@ private:
     bool _check_if_includes_input_rowsets(const RowsetIdUnorderedSet& commit_rowset_ids_set) const;
 
 protected:
-    // other compaction mem tracker
-    std::shared_ptr<MemTrackerLimiter> _other_mem_tracker;
-    // base compaction mem tracker
-    std::shared_ptr<MemTrackerLimiter> _base_mem_tracker;
-    // cumulative compaction mem tracker
-    std::shared_ptr<MemTrackerLimiter> _cumulative_mem_tracker;
+    // the root tracker for this compaction
+    std::shared_ptr<MemTrackerLimiter> _mem_tracker;
+    // the mem tracker for process block
+    std::shared_ptr<MemTracker> _process_block_mem_tracker;
 
     TabletSharedPtr _tablet;
 

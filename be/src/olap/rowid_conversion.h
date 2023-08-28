@@ -33,11 +33,12 @@ namespace doris {
 // destination rowset.
 class RowIdConversion {
 public:
-    RowIdConversion() = default;
+    RowIdConversion() {
+        _rowid_convert_mem_tracker = std::make_shared<MemTrackerLimiter>(
+                MemTrackerLimiter::Type::COMPACTION, "RowIdConversion");
+    }
     ~RowIdConversion() {
-        if (_rowid_convert_mem_tracker.get() != nullptr) {
-            _rowid_convert_mem_tracker->release(_rowid_convert_mem_tracker->consumption());
-        }
+        _rowid_convert_mem_tracker->release(_rowid_convert_mem_tracker->consumption());
     }
 
     // resize segment rowid map to its rows num
@@ -114,9 +115,6 @@ public:
         return _segment_to_id_map.at(segment);
     }
 
-    void set_mem_tracker(std::shared_ptr<MemTrackerLimiter> mem_tracker) {
-        _rowid_convert_mem_tracker = mem_tracker;
-    }
 
     std::shared_ptr<MemTrackerLimiter> get_mem_tracker() { return _rowid_convert_mem_tracker; }
 

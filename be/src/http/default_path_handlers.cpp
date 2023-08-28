@@ -148,9 +148,8 @@ void mem_tracker_handler(const WebPageHandler::ArgumentMap& args, std::stringstr
             MemTrackerLimiter::make_type_snapshots(&snapshots, MemTrackerLimiter::Type::QUERY);
         } else if (iter->second == "load") {
             MemTrackerLimiter::make_type_snapshots(&snapshots, MemTrackerLimiter::Type::LOAD);
-        } else if (iter->second == "other_compaction") {
-            MemTrackerLimiter::make_type_snapshots(&snapshots,
-                                                   MemTrackerLimiter::Type::OTHER_COMPACTION);
+        } else if (iter->second == "compaction") {
+            MemTrackerLimiter::make_type_snapshots(&snapshots, MemTrackerLimiter::Type::COMPACTION);
         } else if (iter->second == "schema_change") {
             MemTrackerLimiter::make_type_snapshots(&snapshots,
                                                    MemTrackerLimiter::Type::SCHEMA_CHANGE);
@@ -159,21 +158,6 @@ void mem_tracker_handler(const WebPageHandler::ArgumentMap& args, std::stringstr
         } else if (iter->second == "experimental") {
             MemTrackerLimiter::make_type_snapshots(&snapshots,
                                                    MemTrackerLimiter::Type::EXPERIMENTAL);
-        } else if (iter->second == "base_compaction") {
-            MemTrackerLimiter::make_type_snapshots(&snapshots,
-                                                   MemTrackerLimiter::Type::BASE_COMPACTION);
-        } else if (iter->second == "cumulative_compaction") {
-            MemTrackerLimiter::make_type_snapshots(&snapshots,
-                                                   MemTrackerLimiter::Type::CUMULATIVE_COMPACTION);
-        } else if (iter->second == "rowid_conversion") {
-            MemTrackerLimiter::make_type_snapshots(&snapshots,
-                                                   MemTrackerLimiter::Type::ROWID_CONVERSION);
-        } else if (iter->second == "primary_key_index") {
-            MemTrackerLimiter::make_type_snapshots(&snapshots,
-                                                   MemTrackerLimiter::Type::PRIMARY_KEY_INDEX);
-        } else if (iter->second == "bloom_filter_key_index") {
-            MemTrackerLimiter::make_type_snapshots(&snapshots,
-                                                   MemTrackerLimiter::Type::BLOOM_FILTER_KEY_INDEX);
         }
     } else {
         (*output) << "<h4>*Note: (see documentation for details)</h4>\n";

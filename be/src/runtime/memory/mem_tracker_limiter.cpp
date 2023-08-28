@@ -113,17 +113,8 @@ MemTracker::Snapshot MemTrackerLimiter::make_snapshot() const {
 
 void MemTrackerLimiter::refresh_global_counter() {
     std::unordered_map<Type, int64_t> type_mem_sum = {
-            {Type::GLOBAL, 0},
-            {Type::QUERY, 0},
-            {Type::LOAD, 0},
-            {Type::SCHEMA_CHANGE, 0},
-            {Type::CLONE, 0},
-            {Type::OTHER_COMPACTION, 0},
-            {Type::BASE_COMPACTION, 0},
-            {Type::CUMULATIVE_COMPACTION, 0},
-            {Type::ROWID_CONVERSION, 0},
-            {Type::PRIMARY_KEY_INDEX, 0},
-            {Type::BLOOM_FILTER_KEY_INDEX, 0}}; // No need refresh Type::EXPERIMENTAL
+            {Type::GLOBAL, 0},        {Type::QUERY, 0}, {Type::LOAD, 0}, {Type::COMPACTION, 0},
+            {Type::SCHEMA_CHANGE, 0}, {Type::CLONE, 0}}; // No need refresh Type::EXPERIMENTAL
     for (unsigned i = 0; i < mem_tracker_limiter_pool.size(); ++i) {
         std::lock_guard<std::mutex> l(mem_tracker_limiter_pool[i].group_lock);
         for (auto tracker : mem_tracker_limiter_pool[i].trackers) {
@@ -238,6 +229,7 @@ std::string MemTrackerLimiter::log_process_usage_str() {
     std::vector<MemTracker::Snapshot> snapshots;
     MemTrackerLimiter::make_process_snapshots(&snapshots);
     MemTrackerLimiter::make_type_snapshots(&snapshots, MemTrackerLimiter::Type::GLOBAL);
+    MemTrackerLimiter::make_type_snapshots(&snapshots, MemTrackerLimiter::Type::COMPACTION);
 
     // Add additional tracker printed when memory exceeds limit.
     snapshots.emplace_back(

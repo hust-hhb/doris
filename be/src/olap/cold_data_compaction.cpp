@@ -59,7 +59,7 @@ Status ColdDataCompaction::execute_compact_impl() {
         Thread::set_idle_sched();
     }
 #endif
-    SCOPED_ATTACH_TASK(_other_mem_tracker);
+    SCOPED_ATTACH_TASK(_mem_tracker);
     int64_t permits = get_compaction_permits();
     std::shared_lock cooldown_conf_rlock(_tablet->get_cooldown_conf_lock());
     if (_tablet->cooldown_conf_unlocked().first != _tablet->replica_id()) {

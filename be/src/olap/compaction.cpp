@@ -55,6 +55,7 @@
 #include "olap/task/engine_checksum_task.h"
 #include "olap/txn_manager.h"
 #include "olap/utils.h"
+#include "runtime/memory/mem_tracker.h"
 #include "runtime/memory/mem_tracker_limiter.h"
 #include "util/time.h"
 #include "util/trace.h"
@@ -72,18 +73,16 @@ Compaction::Compaction(const TabletSharedPtr& tablet, const std::string& label)
           _input_index_size(0),
           _state(CompactionState::INITED),
           _allow_delete_in_cumu_compaction(config::enable_delete_when_cumu_compaction) {
-    _other_mem_tracker =
-            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::OTHER_COMPACTION, label);
-    _base_mem_tracker =
-            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::BASE_COMPACTION, label);
-    _cumulative_mem_tracker = std::make_shared<MemTrackerLimiter>(
-            MemTrackerLimiter::Type::CUMULATIVE_COMPACTION, label);
-    _rowid_conversion.set_mem_tracker(
-            std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::ROWID_CONVERSION, label));
+    _mem_tracker = std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::COMPACTION, label);
+    _process_block_mem_tracker = std::make_shared<MemTracker>("ProcessBlock", _mem_tracker.get());
     init_profile(label);
 }
 
-Compaction::~Compaction() {}
+Compaction::~Compaction() {
+    if (_process_block_mem_tracker.get() != nullptr) {
+        _process_block_mem_tracker->release(_process_block_mem_tracker->consumption());
+    }
+}
 
 void Compaction::init_profile(const std::string& label) {
     _profile = std::make_unique<RuntimeProfile>(label);
@@ -330,6 +329,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
 
     LOG(INFO) << "start " << compaction_name() << ". tablet=" << _tablet->full_name()
               << ", output_version=" << _output_version << ", permits: " << permits;
+    LOG(INFO) << "before compaction" << doris::MemTrackerLimiter::log_process_usage_str();
     bool vertical_compaction = should_vertical_compaction();
     RowsetWriterContext ctx;
     RETURN_IF_ERROR(construct_input_rowset_readers());
@@ -354,7 +354,8 @@ Status Compaction::do_compaction_impl(int64_t permits) {
         if (vertical_compaction) {
             res = Merger::vertical_merge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                                  _input_rs_readers, _output_rs_writer.get(),
-                                                 get_avg_segment_rows(), &stats);
+                                                 get_avg_segment_rows(), &stats,
+                                                 _process_block_mem_tracker);
         } else {
             res = Merger::vmerge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                          _input_rs_readers, _output_rs_writer.get(), &stats);
@@ -511,6 +512,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
               << ". elapsed time=" << watch.get_elapse_second()
               << "s. cumulative_compaction_policy=" << cumu_policy->name()
               << ", compact_row_per_second=" << int(_input_row_num / watch.get_elapse_second());
+    LOG(INFO) << "after compaction" << doris::MemTrackerLimiter::log_process_usage_str();
     return Status::OK();
 }
 

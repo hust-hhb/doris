@@ -74,7 +74,7 @@ Status FullCompaction::execute_compact_impl() {
         return Status::Error<BE_CLONE_OCCURRED>("get_clone_occurred failed");
     }
 
-    SCOPED_ATTACH_TASK(_other_mem_tracker);
+    SCOPED_ATTACH_TASK(_mem_tracker);
 
     // 2. do full compaction, merge rowsets
     int64_t permits = get_compaction_permits();

@@ -33,12 +33,8 @@
 
 namespace doris {
 PrimaryKeyIndexBuilder::~PrimaryKeyIndexBuilder() {
-    if (_primary_key_index_mem_tracker.get() != nullptr) {
-        _primary_key_index_mem_tracker->release(_primary_key_index_mem_tracker->consumption());
-    }
-    if (_bloom_filter_index_mem_tracker.get() != nullptr) {
-        _bloom_filter_index_mem_tracker->release(_bloom_filter_index_mem_tracker->consumption());
-    }
+    _primary_key_index_mem_tracker->release(_primary_key_index_mem_tracker->consumption());
+    _bloom_filter_index_mem_tracker->release(_bloom_filter_index_mem_tracker->consumption());
 }
 Status PrimaryKeyIndexBuilder::init() {
     // TODO(liaoxin) using the column type directly if there's only one column in unique key columns
@@ -57,32 +53,22 @@ Status PrimaryKeyIndexBuilder::init() {
     opt.fpp = 0.01;
     _bloom_filter_index_builder.reset(
             new segment_v2::PrimaryKeyBloomFilterIndexWriterImpl(opt, type_info));
-    _primary_key_index_mem_tracker.reset(new MemTrackerLimiter(
-            MemTrackerLimiter::Type::PRIMARY_KEY_INDEX,
-            "PrimaryKeyIndex:Segment-" + _file_writer->path().filename().string()));
-    _bloom_filter_index_mem_tracker.reset(new MemTrackerLimiter(
-            MemTrackerLimiter::Type::BLOOM_FILTER_KEY_INDEX,
-            "BloomFilterIndex:Segment-" + _file_writer->path().filename().string()));
+    _primary_key_index_mem_tracker.reset(
+            new MemTrackerLimiter(MemTrackerLimiter::Type::COMPACTION, "PrimaryKeyIndex"));
+    _bloom_filter_index_mem_tracker.reset(
+            new MemTrackerLimiter(MemTrackerLimiter::Type::COMPACTION, "BloomFilterIndex"));
     return Status::OK();
 }
 
 Status PrimaryKeyIndexBuilder::add_item(const Slice& key) {
-    int64_t _add_primary_key_mem_size = 0;
     {
-        SCOPED_MEM_COUNT(&_add_primary_key_mem_size);
+        SCOPED_CONSUME_MEM_TRACKER(_primary_key_index_mem_tracker);
         RETURN_IF_ERROR(_primary_key_index_builder->add(&key));
     }
-    if (_primary_key_index_mem_tracker.get() != nullptr) {
-        _primary_key_index_mem_tracker->consume(_add_primary_key_mem_size);
-    }
-    int64_t _add_bloom_filter_mem_size = 0;
     {
-        SCOPED_MEM_COUNT(&_add_bloom_filter_mem_size);
+        SCOPED_CONSUME_MEM_TRACKER(_bloom_filter_index_mem_tracker);
         Slice key_without_seq = Slice(key.get_data(), key.get_size() - _seq_col_length);
         _bloom_filter_index_builder->add_values(&key_without_seq, 1);
-    }
-    if (_bloom_filter_index_mem_tracker.get() != nullptr) {
-        _bloom_filter_index_mem_tracker->consume(_add_bloom_filter_mem_size);
     }
     // the key is already sorted, so the first key is min_key, and
     // the last key is max_key.
@@ -98,31 +84,23 @@ Status PrimaryKeyIndexBuilder::add_item(const Slice& key) {
 
 Status PrimaryKeyIndexBuilder::finalize(segment_v2::PrimaryKeyIndexMetaPB* meta) {
     // finish primary key index
-    int64_t _finish_primary_key_mem_size = 0;
     {
-        SCOPED_MEM_COUNT(&_finish_primary_key_mem_size);
+        SCOPED_CONSUME_MEM_TRACKER(_primary_key_index_mem_tracker);
         RETURN_IF_ERROR(_primary_key_index_builder->finish(meta->mutable_primary_key_index()));
         _disk_size += _primary_key_index_builder->disk_size();
-    }
-    if (_primary_key_index_mem_tracker.get() != nullptr) {
-        _primary_key_index_mem_tracker->consume(_finish_primary_key_mem_size);
     }
     // set min_max key, the sequence column should be removed
     meta->set_min_key(min_key().to_string());
     meta->set_max_key(max_key().to_string());
 
     // finish bloom filter index
-    int64_t _finish_bloom_filter_mem_size = 0;
     {
-        SCOPED_MEM_COUNT(&_finish_bloom_filter_mem_size);
+        SCOPED_CONSUME_MEM_TRACKER(_bloom_filter_index_mem_tracker);
         RETURN_IF_ERROR(_bloom_filter_index_builder->flush());
         uint64_t start_size = _file_writer->bytes_appended();
         RETURN_IF_ERROR(_bloom_filter_index_builder->finish(_file_writer,
                                                             meta->mutable_bloom_filter_index()));
         _disk_size += _file_writer->bytes_appended() - start_size;
-    }
-    if (_bloom_filter_index_mem_tracker.get() != nullptr) {
-        _bloom_filter_index_mem_tracker->consume(_finish_bloom_filter_mem_size);
     }
     return Status::OK();
 }

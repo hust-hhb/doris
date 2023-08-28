@@ -63,17 +63,11 @@ public:
         GLOBAL = 0,          // Life cycle is the same as the process, e.g. Cache and default Orphan
         QUERY = 1,           // Count the memory consumption of all Query tasks.
         LOAD = 2,            // Count the memory consumption of all Load tasks.
-        BASE_COMPACTION = 3, // Count the memory consumption of Base consumption.
+        COMPACTION = 3, // Count the memory consumption of all Base and Cumulative tasks.
         SCHEMA_CHANGE = 4,   // Count the memory consumption of all SchemaChange tasks.
         CLONE = 5, // Count the memory consumption of all EngineCloneTask. Note: Memory that does not contain make/release snapshots.
         EXPERIMENTAL =
-                6, // Experimental memory statistics, usually inaccurate, used for debugging, and expect to add other types in the future.
-        CUMULATIVE_COMPACTION = 7, // Count the memory consumption of Cumulative consumption.
-        OTHER_COMPACTION = 8,      // Count the memory consumption of Other consumption.
-        ROWID_CONVERSION = 9,      // Count the memory consumption of rowid conversion
-        PRIMARY_KEY_INDEX = 10, // Count the memory consumption of primary key index on compaction
-        BLOOM_FILTER_KEY_INDEX =
-                11 // Count the memory consumption of bloom filter key index on compaction
+                6 // Experimental memory statistics, usually inaccurate, used for debugging, and expect to add other types in the future.
     };
 
     struct TrackerLimiterGroup {
@@ -85,15 +79,10 @@ public:
             {Type::GLOBAL, std::make_shared<MemCounter>()},
             {Type::QUERY, std::make_shared<MemCounter>()},
             {Type::LOAD, std::make_shared<MemCounter>()},
+            {Type::COMPACTION, std::make_shared<MemCounter>()},
             {Type::SCHEMA_CHANGE, std::make_shared<MemCounter>()},
             {Type::CLONE, std::make_shared<MemCounter>()},
-            {Type::EXPERIMENTAL, std::make_shared<MemCounter>()},
-            {Type::BASE_COMPACTION, std::make_shared<MemCounter>()},
-            {Type::CUMULATIVE_COMPACTION, std::make_shared<MemCounter>()},
-            {Type::OTHER_COMPACTION, std::make_shared<MemCounter>()},
-            {Type::ROWID_CONVERSION, std::make_shared<MemCounter>()},
-            {Type::PRIMARY_KEY_INDEX, std::make_shared<MemCounter>()},
-            {Type::BLOOM_FILTER_KEY_INDEX, std::make_shared<MemCounter>()}};
+            {Type::EXPERIMENTAL, std::make_shared<MemCounter>()}};
 
 public:
     // byte_limit equal to -1 means no consumption limit, only participate in process memory statistics.
@@ -109,24 +98,14 @@ public:
             return "query";
         case Type::LOAD:
             return "load";
+        case Type::COMPACTION:
+            return "compaction";
         case Type::SCHEMA_CHANGE:
             return "schema_change";
         case Type::CLONE:
             return "clone";
         case Type::EXPERIMENTAL:
             return "experimental";
-        case Type::OTHER_COMPACTION:
-            return "other_compaction";
-        case Type::BASE_COMPACTION:
-            return "base_compaction";
-        case Type::CUMULATIVE_COMPACTION:
-            return "cumulative_compaction";
-        case Type::ROWID_CONVERSION:
-            return "rowid_conversion";
-        case Type::PRIMARY_KEY_INDEX:
-            return "primary_key_index";
-        case Type::BLOOM_FILTER_KEY_INDEX:
-            return "bloom_filter_key_index";
         default:
             LOG(FATAL) << "not match type of mem tracker limiter :" << static_cast<int>(type);
         }
