@@ -128,7 +128,8 @@ Status SegmentWriter::init() {
     return init(column_ids, true);
 }
 
-Status SegmentWriter::init(const std::vector<uint32_t>& col_ids, bool has_key) {
+Status SegmentWriter::init(const std::vector<uint32_t>& col_ids, bool has_key,
+                           std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) {
     DCHECK(_column_writers.empty());
     DCHECK(_column_ids.empty());
     _has_key = has_key;
@@ -250,7 +251,7 @@ Status SegmentWriter::init(const std::vector<uint32_t>& col_ids, bool has_key) {
                         _tablet_schema->column(_tablet_schema->sequence_col_idx()).length() + 1;
             }
             _primary_key_index_builder.reset(
-                    new PrimaryKeyIndexBuilder(_file_writer, seq_col_length));
+                    new PrimaryKeyIndexBuilder(_file_writer, seq_col_length, parent_mem_tracker));
             RETURN_IF_ERROR(_primary_key_index_builder->init());
         } else {
             _short_key_index_builder.reset(

@@ -75,6 +75,8 @@ Compaction::Compaction(const TabletSharedPtr& tablet, const std::string& label)
           _allow_delete_in_cumu_compaction(config::enable_delete_when_cumu_compaction) {
     _mem_tracker = std::make_shared<MemTrackerLimiter>(MemTrackerLimiter::Type::COMPACTION, label);
     _process_block_mem_tracker = std::make_shared<MemTracker>("ProcessBlock", _mem_tracker.get());
+    _rowid_conversion.set_mem_tracker(
+            std::make_shared<MemTracker>("RowIdConversion", _mem_tracker.get()));
     init_profile(label);
 }
 
@@ -355,7 +357,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
             res = Merger::vertical_merge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                                  _input_rs_readers, _output_rs_writer.get(),
                                                  get_avg_segment_rows(), &stats,
-                                                 _process_block_mem_tracker);
+                                                 _process_block_mem_tracker, _mem_tracker);
         } else {
             res = Merger::vmerge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                          _input_rs_readers, _output_rs_writer.get(), &stats);

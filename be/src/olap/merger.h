@@ -63,7 +63,8 @@ public:
             TabletSharedPtr tablet, ReaderType reader_type, TabletSchemaSPtr tablet_schema,
             const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
             RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment, Statistics* stats_output,
-            std::shared_ptr<MemTracker> _process_block_mem_tracker);
+            std::shared_ptr<MemTracker> process_block_mem_tracker,
+            std::shared_ptr<MemTrackerLimiter> parent_mem_tracker);
 
 public:
     // for vertical compaction
@@ -75,7 +76,8 @@ public:
             vectorized::RowSourcesBuffer* row_source_buf,
             const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
             RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment, Statistics* stats_output,
-            std::shared_ptr<MemTracker> _process_block_mem_tracker);
+            std::shared_ptr<MemTracker> process_block_mem_tracker,
+            std::shared_ptr<MemTrackerLimiter> parent_mem_tracker);
 
     // for segcompaction
     static Status vertical_compact_one_group(TabletSharedPtr tablet, ReaderType reader_type,

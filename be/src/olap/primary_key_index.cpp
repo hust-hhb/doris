@@ -33,8 +33,11 @@
 
 namespace doris {
 PrimaryKeyIndexBuilder::~PrimaryKeyIndexBuilder() {
-    _primary_key_index_mem_tracker->release(_primary_key_index_mem_tracker->consumption());
-    _bloom_filter_index_mem_tracker->release(_bloom_filter_index_mem_tracker->consumption());
+    if (_primary_key_index_mem_tracker.get() != nullptr &&
+        _bloom_filter_index_mem_tracker.get() != nullptr) {
+        _primary_key_index_mem_tracker->release(_primary_key_index_mem_tracker->consumption());
+        _bloom_filter_index_mem_tracker->release(_bloom_filter_index_mem_tracker->consumption());
+    }
 }
 Status PrimaryKeyIndexBuilder::init() {
     // TODO(liaoxin) using the column type directly if there's only one column in unique key columns
@@ -53,20 +56,24 @@ Status PrimaryKeyIndexBuilder::init() {
     opt.fpp = 0.01;
     _bloom_filter_index_builder.reset(
             new segment_v2::PrimaryKeyBloomFilterIndexWriterImpl(opt, type_info));
-    _primary_key_index_mem_tracker.reset(
-            new MemTrackerLimiter(MemTrackerLimiter::Type::COMPACTION, "PrimaryKeyIndex"));
-    _bloom_filter_index_mem_tracker.reset(
-            new MemTrackerLimiter(MemTrackerLimiter::Type::COMPACTION, "BloomFilterIndex"));
+    if (_parent_mem_tracker.get() != nullptr) {
+        _primary_key_index_mem_tracker.reset(
+                new MemTracker("PrimaryKeyIndex", _parent_mem_tracker.get()));
+        _bloom_filter_index_mem_tracker.reset(
+                new MemTracker("BloomFilterIndex", _parent_mem_tracker.get()));
+    }
     return Status::OK();
 }
 
 Status PrimaryKeyIndexBuilder::add_item(const Slice& key) {
+    int64_t add_primary_key_mem_size = 0;
     {
-        SCOPED_CONSUME_MEM_TRACKER(_primary_key_index_mem_tracker);
+        SCOPED_MEM_COUNT(&add_primary_key_mem_size);
         RETURN_IF_ERROR(_primary_key_index_builder->add(&key));
     }
+    int64_t add_bloom_filter_mem_size = 0;
     {
-        SCOPED_CONSUME_MEM_TRACKER(_bloom_filter_index_mem_tracker);
+        SCOPED_MEM_COUNT(&add_bloom_filter_mem_size);
         Slice key_without_seq = Slice(key.get_data(), key.get_size() - _seq_col_length);
         _bloom_filter_index_builder->add_values(&key_without_seq, 1);
     }
@@ -79,13 +86,19 @@ Status PrimaryKeyIndexBuilder::add_item(const Slice& key) {
     _max_key.append(key.get_data(), key.get_size());
     _num_rows++;
     _size += key.get_size();
+    if (_primary_key_index_mem_tracker.get() != nullptr &&
+        _bloom_filter_index_mem_tracker.get() != nullptr) {
+        _primary_key_index_mem_tracker->consume(add_primary_key_mem_size);
+        _bloom_filter_index_mem_tracker->consume(add_bloom_filter_mem_size);
+    }
     return Status::OK();
 }
 
 Status PrimaryKeyIndexBuilder::finalize(segment_v2::PrimaryKeyIndexMetaPB* meta) {
     // finish primary key index
+    int64_t finish_primary_key_mem_size = 0;
     {
-        SCOPED_CONSUME_MEM_TRACKER(_primary_key_index_mem_tracker);
+        SCOPED_MEM_COUNT(&finish_primary_key_mem_size);
         RETURN_IF_ERROR(_primary_key_index_builder->finish(meta->mutable_primary_key_index()));
         _disk_size += _primary_key_index_builder->disk_size();
     }
@@ -94,13 +107,19 @@ Status PrimaryKeyIndexBuilder::finalize(segment_v2::PrimaryKeyIndexMetaPB* meta)
     meta->set_max_key(max_key().to_string());
 
     // finish bloom filter index
+    int64_t finish_bloom_filter_mem_size = 0;
     {
-        SCOPED_CONSUME_MEM_TRACKER(_bloom_filter_index_mem_tracker);
+        SCOPED_MEM_COUNT(&finish_bloom_filter_mem_size);
         RETURN_IF_ERROR(_bloom_filter_index_builder->flush());
         uint64_t start_size = _file_writer->bytes_appended();
         RETURN_IF_ERROR(_bloom_filter_index_builder->finish(_file_writer,
                                                             meta->mutable_bloom_filter_index()));
         _disk_size += _file_writer->bytes_appended() - start_size;
+    }
+    if (_primary_key_index_mem_tracker.get() != nullptr &&
+        _bloom_filter_index_mem_tracker.get() != nullptr) {
+        _primary_key_index_mem_tracker->consume(finish_primary_key_mem_size);
+        _bloom_filter_index_mem_tracker->consume(finish_bloom_filter_mem_size);
     }
     return Status::OK();
 }

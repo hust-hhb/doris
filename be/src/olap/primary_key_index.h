@@ -50,12 +50,14 @@ class PrimaryKeyIndexMetaPB;
 // NOTE: for now, it's only used when unique key merge-on-write property enabled.
 class PrimaryKeyIndexBuilder {
 public:
-    PrimaryKeyIndexBuilder(io::FileWriter* file_writer, size_t seq_col_length)
+    PrimaryKeyIndexBuilder(io::FileWriter* file_writer, size_t seq_col_length,
+                           std::shared_ptr<MemTrackerLimiter> parent_mem_tracker)
             : _file_writer(file_writer),
               _num_rows(0),
               _size(0),
               _disk_size(0),
-              _seq_col_length(seq_col_length) {}
+              _seq_col_length(seq_col_length),
+              _parent_mem_tracker(parent_mem_tracker) {}
 
     ~PrimaryKeyIndexBuilder();
 
@@ -85,10 +87,12 @@ private:
     faststring _max_key;
     std::unique_ptr<segment_v2::IndexedColumnWriter> _primary_key_index_builder;
     std::unique_ptr<segment_v2::BloomFilterIndexWriter> _bloom_filter_index_builder;
+    // parent mem tracker
+    std::shared_ptr<MemTrackerLimiter> _parent_mem_tracker;
     // primary key index mem tracker
-    std::shared_ptr<MemTrackerLimiter> _primary_key_index_mem_tracker;
+    std::shared_ptr<MemTracker> _primary_key_index_mem_tracker;
     // bloom filter index mem tracker
-    std::shared_ptr<MemTrackerLimiter> _bloom_filter_index_mem_tracker;
+    std::shared_ptr<MemTracker> _bloom_filter_index_mem_tracker;
 };
 
 class PrimaryKeyIndexReader {
