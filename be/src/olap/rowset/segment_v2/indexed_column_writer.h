@@ -85,6 +85,8 @@ public:
 
     uint64_t disk_size() const { return _disk_size; }
 
+    uint64_t size();
+
 private:
     Status _finish_current_data_page(size_t& num_val);
 

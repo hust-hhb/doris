@@ -39,8 +39,7 @@ public:
     ~VerticalBetaRowsetWriter();
 
     Status add_columns(const vectorized::Block* block, const std::vector<uint32_t>& col_ids,
-                       bool is_key, uint32_t max_rows_per_segment,
-                       std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) override;
+                       bool is_key, uint32_t max_rows_per_segment) override;
 
     // flush last segment's column
     Status flush_columns(bool is_key) override;
@@ -53,8 +52,7 @@ public:
 private:
     // only key group will create segment writer
     Status _create_segment_writer(const std::vector<uint32_t>& column_ids, bool is_key,
-                                  std::unique_ptr<segment_v2::SegmentWriter>* writer,
-                                  std::shared_ptr<MemTrackerLimiter> parent_mem_tracker);
+                                  std::unique_ptr<segment_v2::SegmentWriter>* writer);
 
     Status _flush_columns(std::unique_ptr<segment_v2::SegmentWriter>* segment_writer,
                           bool is_key = false);

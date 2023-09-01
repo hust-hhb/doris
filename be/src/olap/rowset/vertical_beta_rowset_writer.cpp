@@ -63,9 +63,9 @@ VerticalBetaRowsetWriter::~VerticalBetaRowsetWriter() {
     }
 }
 
-Status VerticalBetaRowsetWriter::add_columns(
-        const vectorized::Block* block, const std::vector<uint32_t>& col_ids, bool is_key,
-        uint32_t max_rows_per_segment, std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) {
+Status VerticalBetaRowsetWriter::add_columns(const vectorized::Block* block,
+                                             const std::vector<uint32_t>& col_ids, bool is_key,
+                                             uint32_t max_rows_per_segment) {
     VLOG_NOTICE << "VerticalBetaRowsetWriter::add_columns, columns: " << block->columns();
     size_t num_rows = block->rows();
     if (num_rows == 0) {
@@ -79,7 +79,7 @@ Status VerticalBetaRowsetWriter::add_columns(
         // it must be key columns
         DCHECK(is_key);
         std::unique_ptr<segment_v2::SegmentWriter> writer;
-        RETURN_IF_ERROR(_create_segment_writer(col_ids, is_key, &writer, parent_mem_tracker));
+        RETURN_IF_ERROR(_create_segment_writer(col_ids, is_key, &writer));
         _segment_writers.emplace_back(std::move(writer));
         _cur_writer_idx = 0;
         RETURN_IF_ERROR(_segment_writers[_cur_writer_idx]->append_block(block, 0, num_rows));
@@ -89,7 +89,7 @@ Status VerticalBetaRowsetWriter::add_columns(
             RETURN_IF_ERROR(_flush_columns(&_segment_writers[_cur_writer_idx], true));
 
             std::unique_ptr<segment_v2::SegmentWriter> writer;
-            RETURN_IF_ERROR(_create_segment_writer(col_ids, is_key, &writer, parent_mem_tracker));
+            RETURN_IF_ERROR(_create_segment_writer(col_ids, is_key, &writer));
             _segment_writers.emplace_back(std::move(writer));
             ++_cur_writer_idx;
         }
@@ -110,7 +110,7 @@ Status VerticalBetaRowsetWriter::add_columns(
         if (num_rows_written + num_rows >= num_rows_key_group &&
             _cur_writer_idx < _segment_writers.size() - 1) {
             RETURN_IF_ERROR(_segment_writers[_cur_writer_idx]->append_block(
-                    block, 0, num_rows_key_group - num_rows_written,_mem_tracker));
+                    block, 0, num_rows_key_group - num_rows_written));
             RETURN_IF_ERROR(_flush_columns(&_segment_writers[_cur_writer_idx]));
             start_offset = num_rows_key_group - num_rows_written;
             limit = num_rows - start_offset;
@@ -170,8 +170,7 @@ Status VerticalBetaRowsetWriter::flush_columns(bool is_key) {
 
 Status VerticalBetaRowsetWriter::_create_segment_writer(
         const std::vector<uint32_t>& column_ids, bool is_key,
-        std::unique_ptr<segment_v2::SegmentWriter>* writer,
-        std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) {
+        std::unique_ptr<segment_v2::SegmentWriter>* writer) {
     auto path =
             BetaRowset::segment_file_path(_context.rowset_dir, _context.rowset_id, _num_segment++);
     auto fs = _rowset_meta->fs();
@@ -197,7 +196,7 @@ Status VerticalBetaRowsetWriter::_create_segment_writer(
         _file_writers.push_back(std::move(file_writer));
     }
 
-    auto s = (*writer)->init(column_ids, is_key, parent_mem_tracker);
+    auto s = (*writer)->init(column_ids, is_key);
     if (!s.ok()) {
         LOG(WARNING) << "failed to init segment writer: " << s.to_string();
         writer->reset(nullptr);

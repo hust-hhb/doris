@@ -81,9 +81,6 @@ Compaction::Compaction(const TabletSharedPtr& tablet, const std::string& label)
 }
 
 Compaction::~Compaction() {
-    if (_process_block_mem_tracker.get() != nullptr) {
-        _process_block_mem_tracker->release(_process_block_mem_tracker->consumption());
-    }
 }
 
 void Compaction::init_profile(const std::string& label) {
@@ -357,7 +354,7 @@ Status Compaction::do_compaction_impl(int64_t permits) {
             res = Merger::vertical_merge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                                  _input_rs_readers, _output_rs_writer.get(),
                                                  get_avg_segment_rows(), &stats,
-                                                 _process_block_mem_tracker, _mem_tracker);
+                                                 _process_block_mem_tracker);
         } else {
             res = Merger::vmerge_rowsets(_tablet, compaction_type(), _cur_tablet_schema,
                                          _input_rs_readers, _output_rs_writer.get(), &stats);
@@ -501,6 +498,10 @@ Status Compaction::do_compaction_impl(int64_t permits) {
         } else {
             current_max_version = _tablet->rowset_with_max_version()->end_version();
         }
+    }
+
+    if (_process_block_mem_tracker.get() != nullptr) {
+        _process_block_mem_tracker->release(_process_block_mem_tracker->consumption());
     }
 
     auto cumu_policy = _tablet->cumulative_compaction_policy();

@@ -128,8 +128,7 @@ Status SegmentWriter::init() {
     return init(column_ids, true);
 }
 
-Status SegmentWriter::init(const std::vector<uint32_t>& col_ids, bool has_key,
-                           std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) {
+Status SegmentWriter::init(const std::vector<uint32_t>& col_ids, bool has_key) {
     DCHECK(_column_writers.empty());
     DCHECK(_column_ids.empty());
     _has_key = has_key;
@@ -251,7 +250,7 @@ Status SegmentWriter::init(const std::vector<uint32_t>& col_ids, bool has_key,
                         _tablet_schema->column(_tablet_schema->sequence_col_idx()).length() + 1;
             }
             _primary_key_index_builder.reset(
-                    new PrimaryKeyIndexBuilder(_file_writer, seq_col_length, parent_mem_tracker));
+                    new PrimaryKeyIndexBuilder(_file_writer, seq_col_length));
             RETURN_IF_ERROR(_primary_key_index_builder->init());
         } else {
             _short_key_index_builder.reset(
@@ -692,6 +691,7 @@ Status SegmentWriter::append_block(const vectorized::Block* block, size_t row_po
                 _maybe_invalid_row_cache(key);
                 last_key = std::move(key);
             }
+            _primary_key_index_builder->update_mem_tracker();
         } else {
             // create short key indexes'
             // for min_max key
@@ -704,7 +704,6 @@ Status SegmentWriter::append_block(const vectorized::Block* block, size_t row_po
             }
         }
     }
-
     _num_rows_written += num_rows;
     _olap_data_convertor->clear_source_content();
     return Status::OK();
@@ -1003,7 +1002,9 @@ Status SegmentWriter::_write_short_key_index() {
 
 Status SegmentWriter::_write_primary_key_index() {
     CHECK(_primary_key_index_builder->num_rows() == _row_count);
-    return _primary_key_index_builder->finalize(_footer.mutable_primary_key_index_meta());
+    RETURN_IF_ERROR(_primary_key_index_builder->finalize(_footer.mutable_primary_key_index_meta()));
+    _primary_key_index_builder->update_mem_tracker();
+    return Status::OK();
 }
 
 Status SegmentWriter::_write_footer() {

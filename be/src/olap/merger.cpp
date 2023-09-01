@@ -194,8 +194,7 @@ Status Merger::vertical_compact_one_group(
         const std::vector<uint32_t>& column_group, vectorized::RowSourcesBuffer* row_source_buf,
         const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
         RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment, Statistics* stats_output,
-        std::shared_ptr<MemTracker> process_block_mem_tracker,
-        std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) {
+        std::shared_ptr<MemTracker> process_block_mem_tracker) {
     // build tablet reader
     VLOG_NOTICE << "vertical compact one group, max_rows_per_segment=" << max_rows_per_segment;
     vectorized::VerticalBlockReader reader(row_source_buf);
@@ -254,7 +253,7 @@ Status Merger::vertical_compact_one_group(
     bool eof = false;
     int64_t total_process_block_mem = 0;
     while (!eof && !StorageEngine::instance()->stopped()) {
-        int64_t process_one_block_mem_size;
+        int64_t process_one_block_mem_size = 0;
         {
             SCOPED_MEM_COUNT(&process_one_block_mem_size);
             // Read one block from block reader
@@ -264,7 +263,7 @@ Status Merger::vertical_compact_one_group(
                             tablet->full_name());
             RETURN_NOT_OK_STATUS_WITH_WARN(
                     dst_rowset_writer->add_columns(&block, column_group, is_key,
-                                                   max_rows_per_segment, parent_mem_tracker),
+                                                   max_rows_per_segment),
                     "failed to write block when merging rowsets of tablet " + tablet->full_name());
         }
         total_process_block_mem += process_one_block_mem_size;
@@ -279,6 +278,7 @@ Status Merger::vertical_compact_one_group(
     }
     process_block_mem_tracker->consume(total_process_block_mem);
     LOG(INFO) << "after process tablet " << tablet->get_tablet_info().tablet_id
+              << " total_process_block_mem " << total_process_block_mem
               << doris::MemTrackerLimiter::log_process_usage_str();
     if (StorageEngine::instance()->stopped()) {
         return Status::Error<INTERNAL_ERROR>("tablet {} failed to do compaction, engine stopped",
@@ -296,8 +296,8 @@ Status Merger::vertical_compact_one_group(
         RETURN_IF_ERROR(dst_rowset_writer->flush_columns(is_key));
     }
     process_block_mem_tracker->consume(flush_mem_size);
-    LOG(INFO) << "after flush tablet " << tablet->get_tablet_info().tablet_id
-              << doris::MemTrackerLimiter::log_process_usage_str();
+    LOG(INFO) << "after flush tablet " << tablet->get_tablet_info().tablet_id << " flush_mem_size "
+              << flush_mem_size << doris::MemTrackerLimiter::log_process_usage_str();
 
     return Status::OK();
 }
@@ -368,8 +368,7 @@ Status Merger::vertical_merge_rowsets(TabletSharedPtr tablet, ReaderType reader_
                                       const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
                                       RowsetWriter* dst_rowset_writer, int64_t max_rows_per_segment,
                                       Statistics* stats_output,
-                                      std::shared_ptr<MemTracker> process_block_mem_tracker,
-                                      std::shared_ptr<MemTrackerLimiter> parent_mem_tracker) {
+                                      std::shared_ptr<MemTracker> process_block_mem_tracker) {
     LOG(INFO) << "Start to do vertical compaction, tablet_id: " << tablet->tablet_id();
     std::vector<std::vector<uint32_t>> column_groups;
     vertical_split_columns(tablet_schema, &column_groups);
@@ -383,7 +382,7 @@ Status Merger::vertical_merge_rowsets(TabletSharedPtr tablet, ReaderType reader_
         RETURN_IF_ERROR(vertical_compact_one_group(
                 tablet, reader_type, tablet_schema, is_key, column_groups[i], &row_sources_buf,
                 src_rowset_readers, dst_rowset_writer, max_rows_per_segment, stats_output,
-                process_block_mem_tracker, parent_mem_tracker));
+                process_block_mem_tracker));
         if (is_key) {
             row_sources_buf.flush();
         }
