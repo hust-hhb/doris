@@ -187,9 +187,5 @@ Status IndexedColumnWriter::_flush_index(IndexPageBuilder* index_builder, BTreeM
     return Status::OK();
 }
 
-uint64_t IndexedColumnWriter::size() {
-    return _data_page_builder->size() + _arena.used_size();
-}
-
 } // namespace segment_v2
 } // namespace doris

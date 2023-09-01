@@ -55,7 +55,8 @@ namespace doris {
 Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
                               TabletSchemaSPtr cur_tablet_schema,
                               const std::vector<RowsetReaderSharedPtr>& src_rowset_readers,
-                              RowsetWriter* dst_rowset_writer, Statistics* stats_output) {
+                              RowsetWriter* dst_rowset_writer, Statistics* stats_output,
+                              std::shared_ptr<MemTracker> process_block_mem_tracker) {
     vectorized::BlockReader reader;
     TabletReader::ReaderParams reader_params;
     reader_params.tablet = tablet;
@@ -109,14 +110,21 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
     vectorized::Block block = cur_tablet_schema->create_block(reader_params.return_columns);
     size_t output_rows = 0;
     bool eof = false;
+    int64_t total_process_block_mem = 0;
     while (!eof && !StorageEngine::instance()->stopped()) {
-        // Read one block from block reader
-        RETURN_NOT_OK_STATUS_WITH_WARN(
-                reader.next_block_with_aggregation(&block, &eof),
-                "failed to read next block when merging rowsets of tablet " + tablet->full_name());
-        RETURN_NOT_OK_STATUS_WITH_WARN(
-                dst_rowset_writer->add_block(&block),
-                "failed to write block when merging rowsets of tablet " + tablet->full_name());
+        int64_t process_one_block_mem_size = 0;
+        {
+            SCOPED_MEM_COUNT(&process_one_block_mem_size);
+            // Read one block from block reader
+            RETURN_NOT_OK_STATUS_WITH_WARN(
+                    reader.next_block_with_aggregation(&block, &eof),
+                    "failed to read next block when merging rowsets of tablet " +
+                            tablet->full_name());
+            RETURN_NOT_OK_STATUS_WITH_WARN(
+                    dst_rowset_writer->add_block(&block),
+                    "failed to write block when merging rowsets of tablet " + tablet->full_name());
+        }
+        total_process_block_mem += process_one_block_mem_size;
 
         if (reader_params.record_rowids && block.rows() > 0) {
             std::vector<uint32_t> segment_num_rows;
@@ -128,6 +136,7 @@ Status Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type,
         output_rows += block.rows();
         block.clear_column_data();
     }
+    process_block_mem_tracker->consume(total_process_block_mem);
     if (StorageEngine::instance()->stopped()) {
         return Status::Error<INTERNAL_ERROR>("tablet {} failed to do compaction, engine stopped",
                                              tablet->full_name());
@@ -246,7 +255,6 @@ Status Merger::vertical_compact_one_group(
         }
         stats_output->rowid_conversion->get_mem_tracker()->consume(init_rowid_mem_size);
     }
-    LOG(INFO) << "after init rowid" << doris::MemTrackerLimiter::log_process_usage_str();
 
     vectorized::Block block = tablet_schema->create_block(reader_params.return_columns);
     size_t output_rows = 0;
@@ -277,9 +285,6 @@ Status Merger::vertical_compact_one_group(
         block.clear_column_data();
     }
     process_block_mem_tracker->consume(total_process_block_mem);
-    LOG(INFO) << "after process tablet " << tablet->get_tablet_info().tablet_id
-              << " total_process_block_mem " << total_process_block_mem
-              << doris::MemTrackerLimiter::log_process_usage_str();
     if (StorageEngine::instance()->stopped()) {
         return Status::Error<INTERNAL_ERROR>("tablet {} failed to do compaction, engine stopped",
                                              tablet->full_name());
@@ -296,8 +301,6 @@ Status Merger::vertical_compact_one_group(
         RETURN_IF_ERROR(dst_rowset_writer->flush_columns(is_key));
     }
     process_block_mem_tracker->consume(flush_mem_size);
-    LOG(INFO) << "after flush tablet " << tablet->get_tablet_info().tablet_id << " flush_mem_size "
-              << flush_mem_size << doris::MemTrackerLimiter::log_process_usage_str();
 
     return Status::OK();
 }
@@ -397,8 +400,6 @@ Status Merger::vertical_merge_rowsets(TabletSharedPtr tablet, ReaderType reader_
         RETURN_IF_ERROR(dst_rowset_writer->final_flush());
     }
     process_block_mem_tracker->consume(final_flush_mem_size);
-    LOG(INFO) << "after final flush tablet " << tablet->get_table_id()
-              << doris::MemTrackerLimiter::log_process_usage_str();
 
     return Status::OK();
 }
