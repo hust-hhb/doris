@@ -150,7 +150,8 @@ Status DataSink::create_data_sink(ObjectPool* pool, const TDataSink& thrift_sink
         if (state->query_options().enable_memtable_on_sink_node) {
             sink->reset(new stream_load::VOlapTableSinkV2(pool, row_desc, output_exprs, &status));
         } else {
-            sink->reset(new stream_load::VOlapTableSink(pool, row_desc, output_exprs, &status));
+            sink->reset(new stream_load::VOlapTableSink(pool, row_desc, output_exprs, &status,
+                                                        params.group_commit));
         }
         RETURN_IF_ERROR(status);
         break;

@@ -528,6 +528,7 @@ struct TLoadTxnBeginRequest {
     10: optional i64 timeout
     11: optional Types.TUniqueId request_id
     12: optional string token
+    13: optional i64 table_id
 }
 
 struct TLoadTxnBeginResult {
@@ -627,6 +628,8 @@ struct TStreamLoadPutRequest {
     // only valid when file type is CSV
     52: optional i8 escape
     53: optional bool memtable_on_sink_node;
+    54: optional i64 table_id
+    55: optional bool group_commit
 }
 
 struct TStreamLoadPutResult {
@@ -650,6 +653,29 @@ struct TStreamLoadWithLoadStatusResult {
     4: optional i64 loaded_rows
     5: optional i64 filtered_rows
     6: optional i64 unselected_rows
+}
+
+struct TCheckWalRequest {
+    1: optional i64 table_id
+    2: optional i64 wal_id
+    3: optional i64 db_id
+}
+
+struct TCheckWalResult {
+    1: optional Status.TStatus status
+    2: optional bool need_recovery
+}
+
+struct TUpdateWalMapRequest {
+    1: optional i64 table_id
+    2: optional i64 wal_id
+    3: optional i64 db_id
+    4: optional i64 be_id
+    5: optional i64 txn_id
+}
+
+struct TUpdateWalMapResult {
+    1: optional Status.TStatus status
 }
 
 struct TKafkaRLTaskProgress {
@@ -692,6 +718,7 @@ struct TLoadTxnCommitRequest {
     13: optional string token
     14: optional i64 db_id
     15: optional list<string> tbls
+    16: optional i64 table_id
 }
 
 struct TLoadTxnCommitResult {

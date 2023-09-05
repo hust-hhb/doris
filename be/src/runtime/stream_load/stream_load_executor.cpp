@@ -64,7 +64,8 @@ bvar::LatencyRecorder g_stream_load_begin_txn_latency("stream_load", "begin_txn"
 bvar::LatencyRecorder g_stream_load_precommit_txn_latency("stream_load", "precommit_txn");
 bvar::LatencyRecorder g_stream_load_commit_txn_latency("stream_load", "commit_txn");
 
-Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadContext> ctx) {
+Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadContext> ctx,
+                                                 FinishCallback cb) {
 // submit this params
 #ifndef BE_TEST
     ctx->start_write_data_nanos = MonotonicNanos();
@@ -73,7 +74,7 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
     Status st;
     if (ctx->put_result.__isset.params) {
         st = _exec_env->fragment_mgr()->exec_plan_fragment(
-                ctx->put_result.params, [ctx, this](RuntimeState* state, Status* status) {
+                ctx->put_result.params, [ctx, this, cb](RuntimeState* state, Status* status) {
                     ctx->exec_env()->new_load_stream_mgr()->remove(ctx->id);
                     ctx->commit_infos = std::move(state->tablet_commit_infos());
                     if (status->ok()) {
@@ -143,10 +144,12 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
                             this->commit_txn(ctx.get());
                         }
                     }
+                    cb();
                 });
     } else {
         st = _exec_env->fragment_mgr()->exec_plan_fragment(
-                ctx->put_result.pipeline_params, [ctx, this](RuntimeState* state, Status* status) {
+                ctx->put_result.pipeline_params,
+                [ctx, this, cb](RuntimeState* state, Status* status) {
                     ctx->exec_env()->new_load_stream_mgr()->remove(ctx->id);
                     ctx->commit_infos = std::move(state->tablet_commit_infos());
                     if (status->ok()) {
@@ -216,6 +219,7 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
                             this->commit_txn(ctx.get());
                         }
                     }
+                    cb();
                 });
     }
     if (!st.ok()) {
@@ -224,6 +228,7 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
     }
 #else
     ctx->promise.set_value(k_stream_load_plan_status);
+    cb();
 #endif
     return Status::OK();
 }
@@ -236,6 +241,7 @@ Status StreamLoadExecutor::begin_txn(StreamLoadContext* ctx) {
     request.db = ctx->db;
     request.tbl = ctx->table;
     request.label = ctx->label;
+    request.__set_table_id(ctx->table_id);
     // set timestamp
     request.__set_timestamp(GetCurrentTimeMicros());
     if (ctx->timeout_second != -1) {
@@ -353,6 +359,10 @@ void StreamLoadExecutor::get_commit_request(StreamLoadContext* ctx,
     if (ctx->db_id > 0) {
         request.db_id = ctx->db_id;
         request.__isset.db_id = true;
+    }
+    if (ctx->table_id > 0) {
+        request.table_id = ctx->table_id;
+        request.__isset.table_id = true;
     }
     request.tbl = ctx->table;
     request.txnId = ctx->txn_id;

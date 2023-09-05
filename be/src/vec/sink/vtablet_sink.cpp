@@ -42,6 +42,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "olap/wal_manager.h"
+
 #ifdef DEBUG
 #include <unordered_set>
 #endif
@@ -979,8 +981,8 @@ void VNodeChannel::mark_close() {
 }
 
 VOlapTableSink::VOlapTableSink(ObjectPool* pool, const RowDescriptor& row_desc,
-                               const std::vector<TExpr>& texprs, Status* status)
-        : DataSink(row_desc), _pool(pool) {
+                               const std::vector<TExpr>& texprs, Status* status, bool group_commit)
+        : DataSink(row_desc), _group_commit(group_commit), _pool(pool) {
     // From the thrift expressions create the real exprs.
     *status = vectorized::VExpr::create_expr_trees(texprs, _output_vexpr_ctxs);
     _name = "VOlapTableSink";
@@ -1002,6 +1004,9 @@ Status VOlapTableSink::init(const TDataSink& t_sink) {
     auto& table_sink = t_sink.olap_table_sink;
     _load_id.set_hi(table_sink.load_id.hi);
     _load_id.set_lo(table_sink.load_id.lo);
+    _db_id = table_sink.db_id;
+    _tb_id = table_sink.table_id;
+    _wal_id = table_sink.txn_id;
     _txn_id = table_sink.txn_id;
     _num_replicas = table_sink.num_replicas;
     _tuple_desc_id = table_sink.tuple_id;
@@ -1135,6 +1140,10 @@ Status VOlapTableSink::prepare(RuntimeState* state) {
     }
     // Prepare the exprs to run.
     RETURN_IF_ERROR(vectorized::VExpr::prepare(_output_vexpr_ctxs, state, _row_desc));
+    if (_group_commit) {
+        RETURN_IF_ERROR(state->exec_env()->wal_mgr()->add_wal_path(_db_id, _tb_id, _wal_id));
+        RETURN_IF_ERROR(state->exec_env()->wal_mgr()->create_wal_writer(_wal_id, _wal_writer));
+    }
     _prepare = true;
     return Status::OK();
 }
@@ -1331,6 +1340,7 @@ Status VOlapTableSink::send(RuntimeState* state, vectorized::Block* input_block,
     _tablet_finder->clear_for_new_batch();
     _row_distribution_watch.start();
     auto num_rows = block->rows();
+    _tablet_finder->filter_bitmap().Reset(num_rows);
     size_t partition_num = _vpartition->get_partitions().size();
     if (partition_num == 1 && _tablet_finder->is_find_tablet_every_sink()) {
         RETURN_IF_ERROR(_single_partition_generate(state, block.get(), channel_to_payload, num_rows,
@@ -1372,6 +1382,37 @@ Status VOlapTableSink::send(RuntimeState* state, vectorized::Block* input_block,
                     block.get(), filter_col, block->columns()));
         }
     }
+    //write wal
+    if (_group_commit) {
+        int64_t filtered_rows =
+                _block_convertor->num_filtered_rows() + _tablet_finder->num_filtered_rows();
+        PBlock pblock;
+        size_t uncompressed_bytes = 0, compressed_bytes = 0;
+        if (filtered_rows == 0) {
+            RETURN_IF_ERROR(block.get()->serialize(state->be_exec_version(), &pblock,
+                                                   &uncompressed_bytes, &compressed_bytes,
+                                                   segment_v2::CompressionTypePB::SNAPPY));
+            RETURN_IF_ERROR(_wal_writer->append_blocks(std::vector<PBlock*> {&pblock}));
+        } else {
+            auto cloneBlock = block.get()->clone_without_columns();
+            auto res_block = vectorized::MutableBlock::build_mutable_block(&cloneBlock);
+            for (int i = 0; i < num_rows; ++i) {
+                if (_block_convertor->num_filtered_rows() > 0 &&
+                    _block_convertor->filter_bitmap().Get(i)) {
+                    continue;
+                }
+                if (_tablet_finder->num_filtered_rows() > 0 &&
+                    _tablet_finder->filter_bitmap().Get(i)) {
+                    continue;
+                }
+                res_block.add_row(block.get(), i);
+            }
+            RETURN_IF_ERROR(res_block.to_block().serialize(state->be_exec_version(), &pblock,
+                                                &uncompressed_bytes, &compressed_bytes,
+                                                segment_v2::CompressionTypePB::SNAPPY));
+            RETURN_IF_ERROR(_wal_writer->append_blocks(std::vector<PBlock*> {&pblock}));
+        }
+    }
     // Add block to node channel
     for (size_t i = 0; i < _channels.size(); i++) {
         for (const auto& entry : channel_to_payload[i]) {
@@ -1386,7 +1427,6 @@ Status VOlapTableSink::send(RuntimeState* state, vectorized::Block* input_block,
             }
         }
     }
-
     // check intolerable failure
     for (const auto& index_channel : _channels) {
         RETURN_IF_ERROR(index_channel->check_intolerable_failure());
@@ -1604,6 +1644,10 @@ Status VOlapTableSink::close(RuntimeState* state, Status exec_status) {
         // because it is difficult to handle concurrent problem if we just
         // shutdown it.
         _send_batch_thread_pool_token->wait();
+    }
+
+    if (_wal_writer.get() != nullptr) {
+        _wal_writer->finalize();
     }
 
     DataSink::close(state, exec_status);

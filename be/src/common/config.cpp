@@ -1088,6 +1088,11 @@ DEFINE_Int32(fe_expire_duration_seconds, "60");
 
 DEFINE_Int32(grace_shutdown_wait_seconds, "120");
 
+// Real time load config
+DEFINE_String(group_commit_replay_wal_dir, "./wal");
+DEFINE_Int32(group_commit_replay_wal_retry_num, "10");
+DEFINE_Int32(group_commit_replay_wal_retry_interval_seconds, "5");
+DEFINE_Int32(group_commit_sync_wal_batch, "10");
 #ifdef BE_TEST
 // test s3
 DEFINE_String(test_s3_resource, "resource");

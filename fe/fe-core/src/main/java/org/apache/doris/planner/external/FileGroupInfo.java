@@ -307,6 +307,8 @@ public class FileGroupInfo {
                     // TODO: Add TEXTFILE to TFileFormatType to Support hive text file format.
                     || fileFormat.equalsIgnoreCase(FeConstants.text)) {
                 return TFileFormatType.FORMAT_CSV_PLAIN;
+            } else if (fileFormat.equals("wal")) {
+                return TFileFormatType.FORMAT_WAL;
             } else {
                 throw new UserException("Not supported file format: " + fileFormat);
             }

@@ -1156,19 +1156,31 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         if (Strings.isNullOrEmpty(request.getLabel())) {
             throw new UserException("empty label in begin request");
         }
+        OlapTable table;
+        Database db;
         // check database
         Env env = Env.getCurrentEnv();
-        String fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
-        Database db = env.getInternalCatalog().getDbNullable(fullDbName);
-        if (db == null) {
-            String dbName = fullDbName;
-            if (Strings.isNullOrEmpty(request.getCluster())) {
-                dbName = request.getDb();
+        if (request.isSetTableId() && request.getTableId() > 0) {
+            Pair<Database, Table> pair = env.getInternalCatalog()
+                    .getDbAndTableByTableId(request.getTableId(), TableType.OLAP);
+            if (pair == null) {
+                throw new UserException("unknown table_id=" + request.getTableId());
             }
-            throw new UserException("unknown database, database=" + dbName);
-        }
+            db = pair.first;
+            table = (OlapTable) pair.second;
+        } else {
+            String fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
+            db = env.getInternalCatalog().getDbNullable(fullDbName);
+            if (db == null) {
+                String dbName = fullDbName;
+                if (Strings.isNullOrEmpty(request.getCluster())) {
+                    dbName = request.getDb();
+                }
+                throw new UserException("unknown database, database=" + dbName);
+            }
 
-        OlapTable table = (OlapTable) db.getTableOrMetaException(request.tbl, TableType.OLAP);
+            table = (OlapTable) db.getTableOrMetaException(request.tbl, TableType.OLAP);
+        }
         // begin
         long timeoutSecond = request.isSetTimeout() ? request.getTimeout() : Config.stream_load_default_timeout_second;
         long txnId = Env.getCurrentGlobalTransactionMgr().beginTransaction(
@@ -1319,7 +1331,13 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             tbNames = request.getTbls();
 
         } else {
-            tbNames = Collections.singletonList(request.getTbl());
+            if (request.isSetTableId() && request.getTableId() > 0) {
+                String tableName = db.getTableNullable(request.getTableId()).getName();
+                LOG.info("tableName:" + tableName);
+                tbNames = Collections.singletonList(tableName);
+            } else {
+                tbNames = Collections.singletonList(request.getTbl());
+            }
         }
         List<Table> tables = new ArrayList<>(tbNames.size());
         for (String tbl : tbNames) {
@@ -2019,17 +2037,31 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
 
         Env env = Env.getCurrentEnv();
-        String fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
-        Database db = env.getInternalCatalog().getDbNullable(fullDbName);
-        if (db == null) {
-            String dbName = fullDbName;
-            if (Strings.isNullOrEmpty(request.getCluster())) {
-                dbName = request.getDb();
+        Database db;
+        Table table;
+        String fullDbName;
+        if (request.isSetTableId() && request.getTableId() > 0) {
+            Pair<Database, Table> pair = env.getInternalCatalog()
+                    .getDbAndTableByTableId(request.getTableId(), TableType.OLAP);
+            if (pair == null) {
+                throw new UserException("unknown table_id=" + request.getTableId());
             }
-            throw new UserException("unknown database, database=" + dbName);
+            db = pair.first;
+            table = pair.second;
+            fullDbName = db.getFullName();
+        } else {
+            fullDbName = ClusterNamespace.getFullName(cluster, request.getDb());
+            db = env.getInternalCatalog().getDbNullable(fullDbName);
+            if (db == null) {
+                String dbName = fullDbName;
+                if (Strings.isNullOrEmpty(request.getCluster())) {
+                    dbName = request.getDb();
+                }
+                throw new UserException("unknown database, database=" + dbName);
+            }
+            table = db.getTableOrMetaException(request.getTbl(), TableType.OLAP);
         }
         long timeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs() : 5000;
-        Table table = db.getTableOrMetaException(request.getTbl(), TableType.OLAP);
         return generatePlanFragmentParams(request, db, fullDbName, (OlapTable) table, timeoutMs);
     }
 

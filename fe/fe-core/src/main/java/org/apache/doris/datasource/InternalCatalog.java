@@ -317,6 +317,16 @@ public class InternalCatalog implements CatalogIf<Database> {
         return null;
     }
 
+    public Pair<Database, Table> getDbAndTableByTableId(Long tableId, TableType tableType) {
+        for (Database db : fullNameToDb.values()) {
+            Table table = db.getTableNullable(tableId);
+            if (table != null && tableType == table.getType()) {
+                return Pair.of(db, db.getTableNullable(tableId));
+            }
+        }
+        return null;
+    }
+
     // Use tryLock to avoid potential dead lock
     private boolean tryLock(boolean mustLock) {
         while (true) {

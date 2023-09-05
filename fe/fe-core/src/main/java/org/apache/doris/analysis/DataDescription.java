@@ -351,6 +351,9 @@ public class DataDescription implements InsertStmt.DataDesc {
                     case FORMAT_JSON:
                         this.fileFormat = "json";
                         break;
+                    case FORMAT_WAL:
+                        this.fileFormat = "wal";
+                        break;
                     default:
                         this.fileFormat = "unknown";
                         break;

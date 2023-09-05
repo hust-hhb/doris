@@ -228,6 +228,8 @@ public:
 
     const std::string& db_name() { return _db_name; }
 
+    const std::string& import_label() { return _import_label; }
+
     const std::string& load_dir() const { return _load_dir; }
 
     void set_load_job_id(int64_t job_id) { _load_job_id = job_id; }

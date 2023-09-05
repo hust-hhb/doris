@@ -54,6 +54,7 @@ Status OlapTabletFinder::find_tablet(RuntimeState* state, vectorized::Block* blo
                 },
                 &stop_processing));
         _num_filtered_rows++;
+        _filter_bitmap.Set(row_index, true);
         if (stop_processing) {
             return Status::EndOfFile("Encountered unqualified data, stop processing");
         }
