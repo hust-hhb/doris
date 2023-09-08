@@ -267,7 +267,6 @@ public abstract class FileQueryScanNode extends FileScanNode {
         if (isCsvOrJson || isWal) {
             params.setFileAttributes(getFileAttributes());
             if (getLocationType() == TFileType.FILE_STREAM) {
-                LOG.info("file stream");
                 params.setFileType(TFileType.FILE_STREAM);
                 params.setCompressType(TFileCompressType.PLAIN);
 
