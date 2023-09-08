@@ -14,35 +14,25 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+#include <gtest/gtest.h>
 
 #include <filesystem>
 
 #include "agent/be_exec_version_manager.h"
-#include "common/logging.h"
 #include "common/object_pool.h"
 #include "gen_cpp/internal_service.pb.h"
 #include "gmock/gmock.h"
-#include "google/protobuf/descriptor.h"
-#include "google/protobuf/service.h"
-#include "gtest/gtest.h"
 #include "io/fs/local_file_system.h"
 #include "olap/wal_reader.h"
 #include "olap/wal_writer.h"
 #include "runtime/exec_env.h"
 #include "service/brpc.h"
-#include "testutil/desc_tbl_builder.h"
 #include "testutil/test_util.h"
 #include "util/proto_util.h"
 #include "vec/columns/columns_number.h"
-#include "vec/core/types.h"
 #include "vec/data_types/data_type_number.h"
 #include "vec/runtime/vdata_stream_mgr.h"
 #include "vec/runtime/vdata_stream_recvr.h"
-#include "vec/sink/vdata_stream_sender.h"
-
-#ifndef BE_TEST
-#define BE_TEST
-#endif
 
 using ::testing::_;
 using ::testing::Return;
@@ -137,8 +127,9 @@ TEST_F(WalReaderWriterTest, TestWriteAndRead1) {
         } else if (st.is<ErrorCode::END_OF_FILE>()) {
             break;
         }
-        std::shared_ptr<vectorized::Block> block(new vectorized::Block(pblock));
-        EXPECT_EQ(block_rows, block->rows());
+        vectorized::Block block;
+        block.deserialize(pblock);
+        EXPECT_EQ(block_rows, block.rows());
     }
     wal_reader.finalize();
     EXPECT_EQ(3, block_count);

@@ -138,6 +138,8 @@ public class NativeInsertStmt extends InsertStmt {
 
     private HashSet<String> partialUpdateCols = new HashSet<String>();
 
+    private long tableId = -1;
+
     public NativeInsertStmt(InsertTarget target, String label, List<String> cols, InsertSource source,
             List<String> hints) {
         super(new LabelName(null, label), null, null);
@@ -171,6 +173,13 @@ public class NativeInsertStmt extends InsertStmt {
         this.partialUpdateCols.addAll(cols);
     }
 
+    public NativeInsertStmt(long tableId, String label, List<String> cols, InsertSource source,
+            List<String> hints) {
+        this(new InsertTarget(new TableName(null, null, null), null), label, cols, source, hints);
+        LOG.info("tableId:" + tableId);
+        this.tableId = tableId;
+    }
+
     public boolean isValuesOrConstantSelect() {
         return isValuesOrConstantSelect;
     }
@@ -201,6 +210,19 @@ public class NativeInsertStmt extends InsertStmt {
 
     public void getTables(Analyzer analyzer, Map<Long, TableIf> tableMap, Set<String> parentViewNameSet)
             throws AnalysisException {
+        if (tableId != -1) {
+            TableIf table = Env.getCurrentInternalCatalog().getTableByTableId(tableId);
+            Preconditions.checkState(table instanceof OlapTable);
+            OlapTable olapTable = (OlapTable) table;
+            tblName.setDb(olapTable.getDatabase().getFullName());
+            tblName.setTbl(olapTable.getName());
+            if (olapTable.getDeleteSignColumn() != null) {
+                List<Column> columns = olapTable.getBaseSchema(false);
+                columns.add(olapTable.getDeleteSignColumn());
+                targetColumnNames = columns.stream().map(c -> c.getName()).collect(Collectors.toList());
+            }
+        }
+
         // get dbs of statement
         queryStmt.getTables(analyzer, false, tableMap, parentViewNameSet);
         tblName.analyze(analyzer);

@@ -16,6 +16,8 @@
 // under the License.
 #include "olap/wal_manager.h"
 
+#include <gtest/gtest.h>
+
 #include <filesystem>
 #include <map>
 #include <string>
@@ -24,7 +26,6 @@
 #include "common/config.h"
 #include "gen_cpp/HeartbeatService_types.h"
 #include "gen_cpp/internal_service.pb.h"
-#include "gtest/gtest.h"
 #include "io/fs/local_file_system.h"
 #include "runtime/decimalv2_value.h"
 #include "runtime/exec_env.h"
@@ -43,6 +44,8 @@ namespace doris {
 extern TCheckWalResult k_check_wal_result;
 extern TLoadTxnBeginResult k_stream_load_begin_result;
 extern Status k_stream_load_plan_status;
+extern std::string k_response;
+extern std::string k_request_line;
 
 class WalManagerTest : public testing::Test {
 public:
@@ -58,14 +61,13 @@ public:
         _env->_internal_client_cache = new BrpcClientCache<PBackendService_Stub>();
         _env->_function_client_cache = new BrpcClientCache<PFunctionService_Stub>();
         _env->_stream_load_executor = StreamLoadExecutor::create_shared(_env);
-        _env->_wal_manager = new WalManager(_env, wal_dir);
+        _env->_wal_manager = WalManager::create_shared(_env, wal_dir);
         k_check_wal_result = TCheckWalResult();
         k_stream_load_begin_result = TLoadTxnBeginResult();
         k_stream_load_plan_status = Status::OK();
     }
     void TearDown() override {
         io::global_local_filesystem()->delete_directory(wal_dir);
-        SAFE_DELETE(_env->_wal_manager);
         SAFE_DELETE(_env->_function_client_cache);
         SAFE_DELETE(_env->_internal_client_cache);
         SAFE_DELETE(_env->_master_info);
@@ -86,6 +88,8 @@ private:
 };
 
 TEST_F(WalManagerTest, recovery_normal) {
+    k_response = "OK";
+    k_request_line = "\"Status\": \"Success\",\n";
     k_check_wal_result.__set_need_recovery(true);
 
     std::string db_id = "1";
@@ -140,33 +144,8 @@ TEST_F(WalManagerTest, not_need_recovery) {
     ASSERT_TRUE(!std::filesystem::exists(wal_100));
 }
 
-TEST_F(WalManagerTest, begin_txn_fail) {
-    Status status = Status::InternalError("TestFail");
-    status.to_thrift(&k_stream_load_begin_result.status);
-    k_check_wal_result.__set_need_recovery(true);
-    config::group_commit_replay_wal_retry_num = 3;
-
-    std::string db_id = "1";
-    std::string tb_id = "1";
-    std::string wal_id = "100";
-    std::filesystem::create_directory(wal_dir + "/" + db_id);
-    std::filesystem::create_directory(wal_dir + "/" + db_id + "/" + tb_id);
-    std::string wal_100 = wal_dir + "/" + db_id + "/" + tb_id + "/" + wal_id;
-    createWal(wal_100);
-
-    _env->wal_mgr()->init();
-
-    while (_env->_wal_manager->get_wal_table_size("1") > 0) {
-        sleep(1);
-        continue;
-    }
-    std::string tmp_file = tmp_dir + "/" + db_id + "_" + tb_id + "_" + wal_id;
-    ASSERT_TRUE(std::filesystem::exists(tmp_file));
-    ASSERT_TRUE(!std::filesystem::exists(wal_100));
-}
-
-TEST_F(WalManagerTest, execute_plan_fail) {
-    k_stream_load_plan_status = Status::InternalError("TestFail");
+TEST_F(WalManagerTest, recover_fail) {
+    k_request_line = "\"Status\": \"Fail\",\n";
     k_check_wal_result.__set_need_recovery(true);
     config::group_commit_replay_wal_retry_num = 3;
 

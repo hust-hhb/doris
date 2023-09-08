@@ -253,6 +253,8 @@ int EvHttpServer::on_header(struct evhttp_request* ev_req) {
         evhttp_remove_header(evhttp_request_get_input_headers(ev_req), HttpHeaders::EXPECT);
         return 0;
     }
+    LOG(INFO)<<"finish on header";
+    LOG(INFO)<<handler->request_will_be_read_progressively();
 
     // If request body would be big(greater than 1GB),
     // it is better that request_will_be_read_progressively is set true,

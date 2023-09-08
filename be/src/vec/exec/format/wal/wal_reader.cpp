@@ -25,8 +25,6 @@ WalReader::WalReader(RuntimeState* state) : _state(state) {
     std::vector<std::string> str_list;
     string_split(state->import_label(), "_", str_list);
     _wal_id = std::strtoll(str_list[3].c_str(), NULL, 10);
-//    _wal_path = _state->exec_env()->wal_mgr()->wal_dir() + _path_split + str_list[1] + _path_split +
-//                str_list[2] + _path_split + str_list[3];
 }
 WalReader::~WalReader() {
     if (_wal_reader.get() != nullptr) {
@@ -51,8 +49,9 @@ Status WalReader::get_next_block(Block* block, size_t* read_rows, bool* eof) {
         LOG(WARNING) << "Failed to read wal on path = " << _wal_path;
         return st;
     }
-    vectorized::Block tblock(pblock);
-    block->swap(tblock);
+    vectorized::Block tmp_block;
+    tmp_block.deserialize(pblock);
+    block->swap(tmp_block);
     *read_rows = block->rows();
     VLOG_DEBUG << "read block rows:" << *read_rows;
     return Status::OK();
@@ -70,6 +69,11 @@ void WalReader::string_split(const std::string& str, const std::string& splits,
         strs = strs.substr(pos + step, strs.size());
         pos = strs.find(splits);
     }
+}
+
+Status WalReader::get_columns(std::unordered_map<std::string, TypeDescriptor>* name_to_type,
+                              std::unordered_set<std::string>* missing_cols) {
+    return Status::OK();
 }
 
 } // namespace doris::vectorized

@@ -35,25 +35,19 @@ public:
     using replay_wal_info = std::tuple<int64_t, int64_t, bool>;
     // used when be start and there are wals need to do recovery
     void add_wals(std::vector<std::string> wals);
-    Status check_wal(int64_t wal_id, bool& needRecovery);
     Status replay_wals();
-    Status begin_txn(std::shared_ptr<StreamLoadContext>& stream_load_ctx, int64_t wal_id);
-    Status update_wal_map(std::shared_ptr<StreamLoadContext>& stream_load_ctx);
-    Status generate_stream_load_put_request(std::shared_ptr<StreamLoadContext>& stream_load_ctx,
-                                            TStreamLoadPutRequest& request);
-    Status execute_plan_fragment(std::shared_ptr<StreamLoadContext> stream_load_ctx,
-                                 TStreamLoadPutRequest& request);
+    size_t size();
+
+private:
+    Status check_wal(int64_t wal_id, bool& needRecovery);
     int64_t get_wal_id(const std::string& wal);
     std::string get_tmp_path(const std::string wal);
-    size_t size();
-    Status send_request();
+    Status send_request(int64_t wal_id, const std::string& wal);
 
 private:
     ExecEnv* _exec_env;
     int64_t _db_id;
     int64_t _table_id;
-//    std::string _wal_dir;
-//    std::string _tmp_dir;
     std::string _relay = "relay";
     std::string _split = "_";
     mutable std::mutex _replay_wal_lock;

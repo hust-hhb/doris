@@ -49,10 +49,7 @@ public:
                 "./be/test/runtime/test_data/user_function_cache/normal");
     }
 
-    void TearDown() override {
-        io::global_local_filesystem()->delete_directory(wal_dir);
-        SAFE_DELETE(_env->_wal_manager);
-    }
+    void TearDown() override { io::global_local_filesystem()->delete_directory(wal_dir); }
 
 protected:
     virtual void SetUp() override {}
@@ -215,7 +212,7 @@ void VWalScannerTest::init() {
     _tnode.__isset.file_scan_node = true;
 
     _env = ExecEnv::GetInstance();
-    _env->_wal_manager = new WalManager(_env, wal_dir);
+    _env->_wal_manager = WalManager::create_shared(_env, wal_dir);
     _env->_wal_manager->add_wal_path(db_id, tb_id, txn_id);
 }
 

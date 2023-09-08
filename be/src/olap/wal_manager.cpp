@@ -175,6 +175,9 @@ Status WalManager::scan_wals(const std::string& wal_path) {
 
 Status WalManager::replay() {
     do {
+        if (_exec_env->master_info() == nullptr) {
+            break;
+        }
         // port == 0 means not received heartbeat yet
         while (_exec_env->master_info()->network_address.port == 0) {
             sleep(1);

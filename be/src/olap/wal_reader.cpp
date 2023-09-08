@@ -36,8 +36,7 @@ Status WalReader::init() {
 }
 
 Status WalReader::finalize() {
-    RETURN_IF_ERROR(file_reader->close());
-    return Status::OK();
+    return file_reader->close();
 }
 
 Status WalReader::read_block(PBlock& block) {

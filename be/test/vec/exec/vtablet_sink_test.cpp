@@ -365,7 +365,7 @@ public:
         _env->_master_info->network_address.port = 1234;
         _env->_internal_client_cache = new BrpcClientCache<PBackendService_Stub>();
         _env->_function_client_cache = new BrpcClientCache<PFunctionService_Stub>();
-        _env->_wal_manager = new WalManager(_env, wal_dir);
+        _env->_wal_manager = WalManager::create_shared(_env, wal_dir);
         _env->wal_mgr()->init();
         ThreadPoolBuilder("SendBatchThreadPool")
                 .set_min_threads(1)
@@ -378,7 +378,7 @@ public:
 
     void TearDown() override {
         io::global_local_filesystem()->delete_directory(wal_dir);
-        SAFE_DELETE(_env->_wal_manager);
+//        SAFE_DELETE(_env->_wal_manager));
         SAFE_DELETE(_env->_internal_client_cache);
         SAFE_DELETE(_env->_function_client_cache);
         SAFE_DELETE(_env->_master_info);
@@ -933,12 +933,7 @@ TEST_F(VOlapTableSinkTest, group_commit) {
     }
     vectorized::Block org_block(block);
 
-//    std::shared_ptr<doris::vectorized::FutureBlock> future_block =
-//            std::make_shared<doris::vectorized::FutureBlock>();
-//    future_block->swap(block);
-
     // send
-//    st = sink.send(&state, future_block.get());
     st = sink.send(&state, &block);
     ASSERT_TRUE(st.ok());
     // close
@@ -960,18 +955,13 @@ TEST_F(VOlapTableSinkTest, group_commit) {
     auto wal_reader = WalReader(wal_path);
     wal_reader.init();
     st = wal_reader.read_block(pblock);
-    std::shared_ptr<vectorized::Block> wal_block(new vectorized::Block(pblock));
+    vectorized::Block wal_block;
+    wal_block.deserialize(pblock);
     ASSERT_TRUE(st.ok() || st.is<ErrorCode::END_OF_FILE>());
-//    ASSERT_EQ(future_block.get()->rows(), wal_block->rows());
-//    for (int i = 0; i < future_block.get()->rows(); i++) {
-//        std::string srcRow = future_block.get()->dump_one_line(i, future_block.get()->columns());
-//        std::string walRow = wal_block->dump_one_line(i, future_block.get()->columns());
-//        ASSERT_TRUE(std::strcmp(srcRow.c_str(), walRow.c_str()) == 0);
-//    }
-    ASSERT_EQ(org_block.rows(), wal_block->rows());
+    ASSERT_EQ(org_block.rows(), wal_block.rows());
     for (int i = 0; i < org_block.rows(); i++) {
         std::string srcRow = org_block.dump_one_line(i, org_block.columns());
-        std::string walRow = wal_block->dump_one_line(i, org_block.columns());
+        std::string walRow = wal_block.dump_one_line(i, org_block.columns());
         ASSERT_TRUE(std::strcmp(srcRow.c_str(), walRow.c_str()) == 0);
     }
 }
@@ -1065,12 +1055,7 @@ TEST_F(VOlapTableSinkTest, group_commit_with_filter_row) {
     }
     vectorized::Block org_block(block);
 
-//    std::shared_ptr<doris::vectorized::FutureBlock> future_block =
-//            std::make_shared<doris::vectorized::FutureBlock>();
-//    future_block->swap(block);
-
     // send
-//    st = sink.send(&state, future_block.get());
     st = sink.send(&state, &block);
     ASSERT_TRUE(st.ok());
     // close
@@ -1092,18 +1077,13 @@ TEST_F(VOlapTableSinkTest, group_commit_with_filter_row) {
     auto wal_reader = WalReader(wal_path);
     wal_reader.init();
     st = wal_reader.read_block(pblock);
-    std::shared_ptr<vectorized::Block> wal_block(new vectorized::Block(pblock));
+    vectorized::Block wal_block;
+    wal_block.deserialize(pblock);
     ASSERT_TRUE(st.ok() || st.is<ErrorCode::END_OF_FILE>());
-//    ASSERT_EQ(future_block.get()->rows()-1, wal_block->rows());
-//    for (int i = 0; i < wal_block->rows(); i++) {
-//        std::string srcRow = future_block.get()->dump_one_line(i, future_block.get()->columns());
-//        std::string walRow = wal_block->dump_one_line(i, future_block.get()->columns());
-//        ASSERT_TRUE(std::strcmp(srcRow.c_str(), walRow.c_str()) == 0);
-//    }
-    ASSERT_EQ(org_block.rows() - 1, wal_block->rows());
-    for (int i = 0; i < wal_block->rows(); i++) {
+    ASSERT_EQ(org_block.rows() - 1, wal_block.rows());
+    for (int i = 0; i < wal_block.rows(); i++) {
         std::string srcRow = org_block.dump_one_line(i, org_block.columns());
-        std::string walRow = wal_block->dump_one_line(i, org_block.columns());
+        std::string walRow = wal_block.dump_one_line(i, org_block.columns());
         ASSERT_TRUE(std::strcmp(srcRow.c_str(), walRow.c_str()) == 0);
     }
 }

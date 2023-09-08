@@ -50,7 +50,7 @@ public:
             _stream_map.emplace(id, stream);
         }
 
-        VLOG_NOTICE << "put stream load pipe: " << id;
+        LOG(INFO) << "put stream load pipe: " << id;
         return Status::OK();
     }
 

@@ -263,9 +263,12 @@ public abstract class FileQueryScanNode extends FileScanNode {
         TFileFormatType fileFormatType = getFileFormatType();
         params.setFormatType(fileFormatType);
         boolean isCsvOrJson = Util.isCsvFormat(fileFormatType) || fileFormatType == TFileFormatType.FORMAT_JSON;
-        if (isCsvOrJson) {
+        boolean isWal = fileFormatType == TFileFormatType.FORMAT_WAL;
+        LOG.info("isWal:" + isWal);
+        if (isCsvOrJson || isWal) {
             params.setFileAttributes(getFileAttributes());
             if (getLocationType() == TFileType.FILE_STREAM) {
+                LOG.info("file stream");
                 params.setFileType(TFileType.FILE_STREAM);
                 params.setCompressType(TFileCompressType.PLAIN);
 

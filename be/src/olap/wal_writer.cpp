@@ -50,7 +50,6 @@ Status WalWriter::append_blocks(const PBlockArray& blocks) {
     size_t offset = 0;
     for (const auto& block : blocks) {
         unsigned long row_length = block->GetCachedSize();
-        LOG(INFO) << "row_length:" << row_length;
         memcpy(row_binary + offset, &row_length, LENGTH_SIZE);
         offset += LENGTH_SIZE;
         memcpy(row_binary + offset, block->SerializeAsString().data(), row_length);
@@ -61,7 +60,6 @@ Status WalWriter::append_blocks(const PBlockArray& blocks) {
     }
     DCHECK(offset == total_size);
     // write rows
-    LOG(INFO) << "total_size:" << total_size;
     RETURN_IF_ERROR(_file_writer->append({row_binary, offset}));
     _count++;
     if (_count % _batch == 0) {

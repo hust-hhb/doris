@@ -17,24 +17,26 @@
 
 #include "olap/wal_table.h"
 
+#include <event2/bufferevent.h>
+#include <event2/event.h>
+#include <event2/event_struct.h>
+#include <event2/http.h>
 #include <thrift/protocol/TDebugProtocol.h>
 
+#include "evhttp.h"
 #include "http/action/stream_load.h"
+#include "http/ev_http_server.h"
+#include "http/http_common.h"
+#include "http/http_headers.h"
+#include "http/utils.h"
 #include "io/fs/local_file_system.h"
 #include "olap/wal_manager.h"
 #include "runtime/client_cache.h"
 #include "runtime/fragment_mgr.h"
 #include "runtime/plan_fragment_executor.h"
-#include "http/ev_http_server.h"
 #include "util/path_util.h"
 #include "util/thrift_rpc_helper.h"
 #include "vec/exec/format/wal/wal_reader.h"
-
-#include <event2/event_struct.h>
-#include <event2/event.h>
-#include <event2/bufferevent.h>
-#include <event2/http.h>
-#include "evhttp.h"
 
 namespace doris {
 
@@ -48,7 +50,8 @@ WalTable::WalTable(ExecEnv* exec_env, int64_t db_id, int64_t table_id)
 WalTable::~WalTable() {}
 
 #ifdef BE_TEST
-TStreamLoadPutResult wal_stream_load_put_result;
+std::string k_response;
+std::string k_request_line;
 #endif
 
 void WalTable::add_wals(std::vector<std::string> wals) {
@@ -167,31 +170,11 @@ Status WalTable::replay_wal_internal(const std::string& wal) {
         LOG(INFO) << "wal is already committed, skip recovery, wal=" << wal_id;
         _exec_env->wal_mgr()->delete_wal(wal_id);
 
-//        RETURN_IF_ERROR(io::global_local_filesystem()->delete_file(std::to_string(wal_id)));
-//        LOG(INFO) << "delete wal=" << wal;
         std::lock_guard<std::mutex> lock(_replay_wal_lock);
         _replay_wal_map.erase(wal);
         return Status::OK();
     }
-    // generate and execute a plan fragment
-    std::shared_ptr<StreamLoadContext> ctx = std::make_shared<StreamLoadContext>(_exec_env);
-    TStreamLoadPutRequest request;
-    st = begin_txn(ctx, wal_id);
-    if (!st.ok()) {
-        LOG(WARNING) << "fail to begin txn files for wal=" << wal << ", st=" << st.to_string();
-        if (ctx->need_rollback) {
-            _exec_env->stream_load_executor()->rollback_txn(ctx.get());
-            ctx->need_rollback = false;
-        }
-        return st;
-    } else {
-        LOG(INFO) << "begin txn files for wal=" << wal << ", st=" << st.to_string();
-    }
-    ctx->wal_path = wal;
-    RETURN_IF_ERROR(update_wal_map(ctx));
-    RETURN_IF_ERROR(generate_stream_load_put_request(ctx, request));
-    RETURN_IF_ERROR(execute_plan_fragment(ctx, request));
-    RETURN_IF_ERROR(send_request());
+    RETURN_IF_ERROR(send_request(wal_id, wal));
     return Status::OK();
 }
 
@@ -202,186 +185,102 @@ int64_t WalTable::get_wal_id(const std::string& wal) {
     return wal_id;
 }
 
-Status WalTable::begin_txn(std::shared_ptr<StreamLoadContext>& stream_load_ctx, int64_t wal_id) {
-    stream_load_ctx->use_streaming = true;
-    stream_load_ctx->load_type = TLoadType::type::MANUL_LOAD;
-    stream_load_ctx->load_src_type = TLoadSourceType::type::RAW;
-    stream_load_ctx->auth.user = "root";
-    stream_load_ctx->auth.passwd = "";
-    stream_load_ctx->db_id = _db_id;
-    stream_load_ctx->table_id = _table_id;
-    stream_load_ctx->wal_id = wal_id;
-    stream_load_ctx->label = _relay + _split + std::to_string(_db_id) + _split +
-                             std::to_string(_table_id) + _split + std::to_string(wal_id) + _split +
-                             std::to_string(UnixMillis());
-    stream_load_ctx->id = UniqueId::gen_uid();             // use a new id
-    stream_load_ctx->format = TFileFormatType::FORMAT_WAL; // this is fake
-    stream_load_ctx->max_filter_ratio = 1.0;
-    RETURN_IF_ERROR(_exec_env->stream_load_executor()->begin_txn(stream_load_ctx.get()));
-    return Status::OK();
+void http_request_done(struct evhttp_request* req, void* arg) {
+    event_base_loopbreak((struct event_base*)arg);
 }
 
-//Status WalTable::update_wal_map(std::shared_ptr<StreamLoadContext>& stream_load_ctx) {
-//    TUpdateWalMapRequest request;
-//    request.__set_table_id(stream_load_ctx->table_id);
-//    request.__set_wal_id(stream_load_ctx->wal_id);
-//    request.__set_db_id(stream_load_ctx->db_id);
-//    request.__set_be_id(_exec_env->master_info()->backend_id);
-//    request.__set_txn_id(stream_load_ctx->txn_id);
-//    TUpdateWalMapResult result;
-//    Status status;
-//    TNetworkAddress master_addr = _exec_env->master_info()->network_address;
-//    if (master_addr.hostname.empty() || master_addr.port == 0) {
-//        status = Status::ServiceUnavailable("Have not get FE Master heartbeat yet");
-//    } else {
-//#ifndef BE_TEST
-//        RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(
-//                master_addr.hostname, master_addr.port,
-//                [&request, &result](FrontendServiceConnection& client) {
-//                    client->updateWalMap(result, request);
-//                }));
-//#else
-//        result = k_update_wal_map_result;
-//#endif
-//        status = Status(result.status);
-//    }
-//    return status;
-//}
-
-Status WalTable::update_wal_map(std::shared_ptr<StreamLoadContext>& stream_load_ctx) {
-    return Status::OK();
-}
-
-void http_request_done(struct evhttp_request *req, void *arg){
-
-}
-
-Status WalTable::send_request() {
-    struct event_base* base;
-    struct evhttp_connection* conn;
-    struct evhttp_request* req;
-
+Status WalTable::send_request(int64_t wal_id, const std::string& wal) {
+#ifndef BE_TEST
+    struct event_base* base = nullptr;
+    struct evhttp_connection* conn = nullptr;
+    struct evhttp_request* req = nullptr;
+    event_init();
     base = event_base_new();
     conn = evhttp_connection_new("127.0.0.1", doris::config::webserver_port);
     evhttp_connection_set_base(conn, base);
-
     req = evhttp_request_new(http_request_done, base);
-    evhttp_add_header(req->output_headers, "format", "WAL");
-    evhttp_make_request(conn, req, EVHTTP_REQ_PUT, "/api/{db}/{table}/_stream_load");
-    evhttp_connection_set_timeout(req->evcon, 600);
+    std::string label = _relay + _split + std::to_string(_db_id) + _split +
+                        std::to_string(_table_id) + _split + std::to_string(wal_id) + _split +
+                        std::to_string(UnixMillis());
+    evhttp_add_header(req->output_headers, HTTP_LABEL_KEY.c_str(), label.c_str());
+    evhttp_add_header(req->output_headers, HTTP_FORMAT_KEY.c_str(), "WAL");
+    std::string auth = encode_basic_auth("root", "");
+    evhttp_add_header(req->output_headers, HttpHeaders::AUTHORIZATION, auth.c_str());
+    evhttp_add_header(req->output_headers, HTTP_DB_ID_KY.c_str(), std::to_string(_db_id).c_str());
+    evhttp_add_header(req->output_headers, HTTP_TABLE_ID_KY.c_str(),
+                      std::to_string(_table_id).c_str());
+    std::stringstream ss;
+    ss << "insert into " << std::to_string(_table_id)
+       << " select * from "
+          "http_stream(\"format\" = \"WAL\", \"table_id\" = \""
+       << std::to_string(_table_id) << "\")";
+    evhttp_add_header(req->output_headers, HTTP_SQL.c_str(), ss.str().c_str());
+    evbuffer* output = evhttp_request_get_output_buffer(req);
+    evbuffer_add_printf(output, "replay wal %s", std::to_string(wal_id).c_str());
+
+    evhttp_make_request(conn, req, EVHTTP_REQ_PUT, "/api/_http_stream");
+    evhttp_connection_set_timeout(req->evcon, 300);
 
     event_base_dispatch(base);
     evhttp_connection_free(conn);
     event_base_free(base);
-
-    return Status::OK();
-}
-
-Status WalTable::generate_stream_load_put_request(
-        std::shared_ptr<StreamLoadContext>& stream_load_ctx, TStreamLoadPutRequest& request) {
-    request.user = stream_load_ctx->auth.user;
-    request.passwd = stream_load_ctx->auth.passwd;
-    request.db = stream_load_ctx->db;
-    request.tbl = stream_load_ctx->table;
-    request.__set_table_id(stream_load_ctx->table_id);
-    request.txnId = stream_load_ctx->txn_id;
-    request.__set_loadId(stream_load_ctx->id.to_thrift());
-    request.__set_thrift_rpc_timeout_ms(config::thrift_rpc_timeout_ms);
-    request.formatType = stream_load_ctx->format;
-    request.fileType = TFileType::FILE_STREAM; // this is fake
-    return Status::OK();
-}
-
-Status WalTable::execute_plan_fragment(std::shared_ptr<StreamLoadContext> ctx,
-                                       TStreamLoadPutRequest& request) {
-#ifndef BE_TEST
-    // plan this load
-    TNetworkAddress master_addr = _exec_env->master_info()->network_address;
-    int64_t stream_load_put_start_time = MonotonicNanos();
-    RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(
-            master_addr.hostname, master_addr.port,
-            [&request, ctx](FrontendServiceConnection& client) {
-                client->streamLoadPut(ctx->put_result, request);
-            }));
-    ctx->stream_load_put_cost_nanos = MonotonicNanos() - stream_load_put_start_time;
+    const char* response = evhttp_request_get_response_code_line(req);
 #else
-    ctx->put_result = wal_stream_load_put_result;
+    const char* response = k_response.c_str();
 #endif
-    Status plan_status(Status::create(ctx->put_result.status));
-    if (!plan_status.ok()) {
-        LOG(WARNING) << "plan streaming load failed. errmsg=" << plan_status << ctx->brief();
-        return plan_status;
-    }
-    ctx->put_result.params.__set_import_label(ctx->label);
-    VLOG_NOTICE << "params is " << apache::thrift::ThriftDebugString(ctx->put_result.params);
-
-    ctx->start_write_data_nanos = MonotonicNanos();
-    LOG(INFO) << "begin to execute job. label=" << ctx->label << ", txn_id=" << ctx->txn_id
-              << ", query_id=" << print_id(ctx->put_result.params.params.query_id);
-    std::shared_ptr<bool> running(new bool(true));
-    auto st = _exec_env->stream_load_executor()->execute_plan_fragment(ctx, [ctx, running, this]() {
+    if (response != nullptr && 0 == strcmp(response, "OK")) {
+        bool success = false;
+        evbuffer* input = nullptr;
+        size_t len = 0;
 #ifndef BE_TEST
+        input = evhttp_request_get_input_buffer(req);
+        char* request_line = evbuffer_readln(input, &len, EVBUFFER_EOL_CRLF);
 #else
-        ctx->status=ctx->future.get();
+        const char* request_line = k_request_line.c_str();
 #endif
-        if (ctx->status.ok()) {
-            // If put file success we need commit this load
-            int64_t commit_and_publish_start_time = MonotonicNanos();
-            LOG(INFO) << "commit txn:" << ctx->txn_id;
-            ctx->status = _exec_env->stream_load_executor()->commit_txn(ctx.get());
-            ctx->commit_and_publish_txn_cost_nanos =
-                    MonotonicNanos() - commit_and_publish_start_time;
-        }
-        if (!ctx->status.ok() && ctx->status.code() != TStatusCode::PUBLISH_TIMEOUT) {
-            LOG(WARNING) << "handle relay wal load failed, id=" << ctx->id
-                         << ", need_rollback=" << ctx->need_rollback
-                         << ", errmsg=" << ctx->status.to_string();
-            if (ctx->need_rollback) {
-                _exec_env->stream_load_executor()->rollback_txn(ctx.get());
-                ctx->need_rollback = false;
+        std::string m = "\"Status\": ";
+        while (request_line != nullptr) {
+            std::string s(request_line);
+            auto pos = s.find(m);
+            if (pos != s.npos) {
+                auto sub = s.substr(pos + m.size());
+                if (sub.find("Fail") != sub.npos) {
+                    success = false;
+                } else {
+                    success = true;
+                }
+                break;
             }
+            request_line = evbuffer_readln(input, &len, EVBUFFER_EOL_CRLF);
         }
-        auto fragment_instance_id = ctx->put_result.params.params.fragment_instance_id;
-        ctx->load_cost_millis = UnixMillis() - ctx->start_millis;
-        LOG(INFO) << "finish replay wal stream load, fragment=" << fragment_instance_id
-                  << ", id=" << ctx->id << ", label=" << ctx->label
-                  << ", cost=" << ctx->load_cost_millis << " ms, body_size=" << ctx->body_bytes
-                  << " bytes, load_rows=" << ctx->number_loaded_rows
-                  << ", st=" << ctx->status.to_string();
-        if (ctx->status.ok() || ctx->status.code() == TStatusCode::PUBLISH_TIMEOUT) {
-            // delete WAL
-//            auto st = io::global_local_filesystem()->delete_file(ctx->wal_path);
-//            if (st.ok()) {
-//                LOG(INFO) << "delete wal=" << ctx->wal_path;
-//            } else {
-//                LOG(WARNING) << "fail to delete wal=" << ctx->wal_path;
-//            }
-            _exec_env->wal_mgr()->delete_wal(ctx->wal_id);
+        if (success) {
+            LOG(INFO) << "success to replay wal =" << wal;
+            _exec_env->wal_mgr()->delete_wal(wal_id);
             std::lock_guard<std::mutex> lock(_replay_wal_lock);
-            _replay_wal_map.erase(ctx->wal_path);
+            _replay_wal_map.erase(wal);
         } else {
-            // recovery WAL if failed
+            LOG(INFO) << "fail to replay wal =" << wal << ",status:Fail";
             std::lock_guard<std::mutex> lock(_replay_wal_lock);
-            auto it = _replay_wal_map.find(ctx->wal_path);
+            auto it = _replay_wal_map.find(wal);
             if (it != _replay_wal_map.end()) {
                 auto& [retry_num, start_time, replaying] = it->second;
                 replaying = false;
             } else {
-                _replay_wal_map.emplace(ctx->wal_path, replay_wal_info {0, UnixMillis(), false});
+                _replay_wal_map.emplace(wal, replay_wal_info {0, UnixMillis(), false});
             }
         }
-        *running.get() = false;
-    });
-    while (st.ok() && *running.get()) {
-        LOG(INFO) << "wait for relay wal done, wal=" << ctx->wal_id;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    } else {
+        LOG(INFO) << "fail to replay wal =" << wal << ",response:" << response;
+        std::lock_guard<std::mutex> lock(_replay_wal_lock);
+        auto it = _replay_wal_map.find(wal);
+        if (it != _replay_wal_map.end()) {
+            auto& [retry_num, start_time, replaying] = it->second;
+            replaying = false;
+        } else {
+            _replay_wal_map.emplace(wal, replay_wal_info {0, UnixMillis(), false});
+        }
     }
-    RETURN_IF_ERROR(st);
-    LOG(INFO) << "WalManager::execute_plan_fragment, id=" << ctx->id
-              << ", instanceId=" << ctx->put_result.params.params.fragment_instance_id
-              << ", status=" << ctx->status;
-    st = ctx->status.code() == TStatusCode::PUBLISH_TIMEOUT ? Status::OK() : ctx->status;
-    return st;
+    return Status::OK();
 }
 
 size_t WalTable::size() {
@@ -389,41 +288,16 @@ size_t WalTable::size() {
     return _replay_wal_map.size();
 }
 
-//Status WalTable::check_wal(int64_t wal_id, bool& needRecovery) {
-//    TCheckWalRequest request;
-//    request.__set_table_id(_table_id);
-//    request.__set_wal_id(wal_id);
-//    request.__set_db_id(_db_id);
-//    TCheckWalResult result;
-//    Status status;
-//    TNetworkAddress master_addr = _exec_env->master_info()->network_address;
-//    if (master_addr.hostname.empty() || master_addr.port == 0) {
-//        status = Status::ServiceUnavailable("Have not get FE Master heartbeat yet");
-//    } else {
-//#ifndef BE_TEST
-//        RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(
-//                master_addr.hostname, master_addr.port,
-//                [&request, &result](FrontendServiceConnection& client) {
-//                    client->checkWal(result, request);
-//                }));
-//#else
-//        result = k_check_wal_result;
-//#endif
-//        needRecovery = result.need_recovery;
-//        status = Status(result.status);
-//    }
-//    return status;
-//}
-
 Status WalTable::check_wal(int64_t wal_id, bool& needRecovery) {
     TCheckWalResult result;
     Status status;
 #ifndef BE_TEST
+    //todo
 #else
     result = k_check_wal_result;
 #endif
-    needRecovery = result.need_recovery;
-    status = Status(result.status);
+    //needRecovery = result.need_recovery;
+    status = Status::create(result.status);
     return status;
 }
 } // namespace doris

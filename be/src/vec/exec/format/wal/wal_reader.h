@@ -27,6 +27,8 @@ public:
     ~WalReader() override;
     Status init_reader();
     Status get_next_block(Block* block, size_t* read_rows, bool* eof) override;
+    Status get_columns(std::unordered_map<std::string, TypeDescriptor>* name_to_type,
+                       std::unordered_set<std::string>* missing_cols) override;
     static void string_split(const std::string& str, const std::string& splits,
                              std::vector<std::string>& res);
 

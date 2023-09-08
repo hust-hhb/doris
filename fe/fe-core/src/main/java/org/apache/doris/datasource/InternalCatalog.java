@@ -317,11 +317,11 @@ public class InternalCatalog implements CatalogIf<Database> {
         return null;
     }
 
-    public Pair<Database, Table> getDbAndTableByTableId(Long tableId, TableType tableType) {
+    public Table getTableByTableId(Long tableId) {
         for (Database db : fullNameToDb.values()) {
             Table table = db.getTableNullable(tableId);
-            if (table != null && tableType == table.getType()) {
-                return Pair.of(db, db.getTableNullable(tableId));
+            if (table != null) {
+                return table;
             }
         }
         return null;
