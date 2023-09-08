@@ -164,7 +164,6 @@ int HttpStreamAction::on_header(HttpRequest* req) {
 
     auto st = _on_header(req, ctx);
     if (!st.ok()) {
-        LOG(WARNING)<<"fail";
         ctx->status = std::move(st);
         if (ctx->body_sink != nullptr) {
             ctx->body_sink->cancel(ctx->status.to_string());
@@ -221,12 +220,6 @@ Status HttpStreamAction::_on_header(HttpRequest* http_req, std::shared_ptr<Strea
 void HttpStreamAction::on_chunk_data(HttpRequest* req) {
     std::shared_ptr<StreamLoadContext> ctx =
             std::static_pointer_cast<StreamLoadContext>(req->handler_ctx());
-    if(ctx == nullptr ){
-        LOG(INFO)<<"null";
-    }else{
-        LOG(INFO)<<"status:"<<ctx->status.to_string();
-    }
-
     if (ctx == nullptr || !ctx->status.ok()) {
         return;
     }
@@ -235,7 +228,6 @@ void HttpStreamAction::on_chunk_data(HttpRequest* req) {
     auto evbuf = evhttp_request_get_input_buffer(ev_req);
 
     int64_t start_read_data_time = MonotonicNanos();
-    LOG(INFO) << "size:" << evbuffer_get_length(evbuf);
     while (evbuffer_get_length(evbuf) > 0) {
         auto bb = ByteBuffer::allocate(128 * 1024);
         auto remove_bytes = evbuffer_remove(evbuf, bb->ptr, bb->capacity);
@@ -245,12 +237,9 @@ void HttpStreamAction::on_chunk_data(HttpRequest* req) {
         // schema_buffer stores 1M of data for parsing column information
         // need to determine whether to cache for the first time
         if (ctx->is_read_schema) {
-            LOG(INFO) << "1";
             if (ctx->schema_buffer->pos + remove_bytes < config::stream_tvf_buffer_size) {
-                LOG(INFO) << "2";
                 ctx->schema_buffer->put_bytes(bb->ptr, remove_bytes);
             } else {
-                LOG(INFO) << "3";
                 ctx->need_schema = true;
                 ctx->is_read_schema = false;
                 ctx->status = _process_put(req, ctx);
@@ -266,7 +255,6 @@ void HttpStreamAction::on_chunk_data(HttpRequest* req) {
     }
     // after all the data has been read and it has not reached 1M, it will execute here
     if (ctx->is_read_schema) {
-        LOG(INFO) << "4";
         ctx->need_schema = true;
         ctx->is_read_schema = false;
         ctx->status = _process_put(req, ctx);

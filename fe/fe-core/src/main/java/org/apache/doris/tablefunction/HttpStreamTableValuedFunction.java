@@ -42,7 +42,6 @@ public class HttpStreamTableValuedFunction extends ExternalFileTableValuedFuncti
             if (!FILE_FORMAT_PROPERTIES.contains(key.toLowerCase())) {
                 throw new AnalysisException(key + " is invalid property");
             }
-            LOG.info("key:" + key + ",value:" + params.get(key));
             validParams.put(key, params.get(key));
         }
         parseProperties(validParams);

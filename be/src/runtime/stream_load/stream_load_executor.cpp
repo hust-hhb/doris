@@ -146,8 +146,7 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
                 });
     } else {
         st = _exec_env->fragment_mgr()->exec_plan_fragment(
-                ctx->put_result.pipeline_params,
-                [ctx, this](RuntimeState* state, Status* status) {
+                ctx->put_result.pipeline_params, [ctx, this](RuntimeState* state, Status* status) {
                     ctx->exec_env()->new_load_stream_mgr()->remove(ctx->id);
                     ctx->commit_infos = std::move(state->tablet_commit_infos());
                     if (status->ok()) {

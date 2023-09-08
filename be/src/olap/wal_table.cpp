@@ -203,12 +203,9 @@ Status WalTable::send_request(int64_t wal_id, const std::string& wal) {
                         std::to_string(_table_id) + _split + std::to_string(wal_id) + _split +
                         std::to_string(UnixMillis());
     evhttp_add_header(req->output_headers, HTTP_LABEL_KEY.c_str(), label.c_str());
-    evhttp_add_header(req->output_headers, HTTP_FORMAT_KEY.c_str(), "WAL");
+//    evhttp_add_header(req->output_headers, HTTP_FORMAT_KEY.c_str(), "WAL");
     std::string auth = encode_basic_auth("root", "");
     evhttp_add_header(req->output_headers, HttpHeaders::AUTHORIZATION, auth.c_str());
-    evhttp_add_header(req->output_headers, HTTP_DB_ID_KY.c_str(), std::to_string(_db_id).c_str());
-    evhttp_add_header(req->output_headers, HTTP_TABLE_ID_KY.c_str(),
-                      std::to_string(_table_id).c_str());
     std::stringstream ss;
     ss << "insert into " << std::to_string(_table_id)
        << " select * from "
@@ -296,7 +293,7 @@ Status WalTable::check_wal(int64_t wal_id, bool& needRecovery) {
 #else
     result = k_check_wal_result;
 #endif
-    //needRecovery = result.need_recovery;
+    needRecovery = result.need_recovery;
     status = Status::create(result.status);
     return status;
 }

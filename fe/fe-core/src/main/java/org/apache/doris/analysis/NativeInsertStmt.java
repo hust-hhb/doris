@@ -176,7 +176,6 @@ public class NativeInsertStmt extends InsertStmt {
     public NativeInsertStmt(long tableId, String label, List<String> cols, InsertSource source,
             List<String> hints) {
         this(new InsertTarget(new TableName(null, null, null), null), label, cols, source, hints);
-        LOG.info("tableId:" + tableId);
         this.tableId = tableId;
     }
 
