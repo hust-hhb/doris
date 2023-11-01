@@ -1827,16 +1827,37 @@ public class StmtExecutor {
             label = context.getTxnEntry().getLabel();
             txnId = context.getTxnEntry().getTxnConf().getTxnId();
         } else if (insertStmt instanceof NativeInsertStmt && ((NativeInsertStmt) insertStmt).isGroupCommit()) {
+            while (Env.getCurrentEnv().getGroupCommitManager().isBlock(insertStmt.getTargetTable().getId())) {
+                LOG.info("insert table " + insertStmt.getTargetTable().getId() + " is blocked");
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    LOG.info("stmt executor sleep wait InterruptedException: ", ie);
+                }
+            }
             NativeInsertStmt nativeInsertStmt = (NativeInsertStmt) insertStmt;
             Backend backend = context.getInsertGroupCommit(insertStmt.getTargetTable().getId());
-            if (backend == null || !backend.isAlive()) {
+            if (backend == null || !backend.isAlive() || backend.isDecommissioned()) {
                 List<Long> allBackendIds = Env.getCurrentSystemInfo().getAllBackendIds(true);
                 if (allBackendIds.isEmpty()) {
                     throw new DdlException("No alive backend");
                 }
                 Collections.shuffle(allBackendIds);
-                backend = Env.getCurrentSystemInfo().getBackend(allBackendIds.get(0));
-                context.setInsertGroupCommit(insertStmt.getTargetTable().getId(), backend);
+                boolean find = false;
+                for (Long beId : allBackendIds) {
+                    backend = Env.getCurrentSystemInfo().getBackend(beId);
+                    if (!backend.isDecommissioned()) {
+                        context.setInsertGroupCommit(insertStmt.getTargetTable().getId(), backend);
+                        find = true;
+                        LOG.info("choose new be:" + backend.getHost());
+                        break;
+                    }
+                }
+                if (!find) {
+                    throw new DdlException("No suitable backend");
+                }
+                // backend = Env.getCurrentSystemInfo().getBackend(allBackendIds.get(0));
+                // context.setInsertGroupCommit(insertStmt.getTargetTable().getId(), backend);
             }
             int maxRetry = 3;
             for (int i = 0; i < maxRetry; i++) {
