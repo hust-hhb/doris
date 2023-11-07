@@ -1849,15 +1849,13 @@ public class StmtExecutor {
                     if (!backend.isDecommissioned()) {
                         context.setInsertGroupCommit(insertStmt.getTargetTable().getId(), backend);
                         find = true;
-                        LOG.info("choose new be:" + backend.getHost());
+                        LOG.debug("choose new be {}", backend.getId());
                         break;
                     }
                 }
                 if (!find) {
                     throw new DdlException("No suitable backend");
                 }
-                // backend = Env.getCurrentSystemInfo().getBackend(allBackendIds.get(0));
-                // context.setInsertGroupCommit(insertStmt.getTargetTable().getId(), backend);
             }
             int maxRetry = 3;
             for (int i = 0; i < maxRetry; i++) {
