@@ -348,20 +348,6 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
         this.watershedTxnId = Env.getCurrentGlobalTransactionMgr()
                 .getTransactionIDGenerator().getNextTransactionId();
         this.jobState = JobState.WAITING_TXN;
-        // wait wal done here
-        List<Long> aliveBeIds = Env.getCurrentSystemInfo().getAllBackendIds(true);
-        boolean walFinished = Env.getCurrentEnv().getGroupCommitManager()
-                .isPreviousWalFinished(tableId, watershedTxnId, aliveBeIds);
-        while (!walFinished) {
-            LOG.info("wai for wal queue size to be empty");
-            walFinished = Env.getCurrentEnv().getGroupCommitManager()
-                    .isPreviousWalFinished(tableId, watershedTxnId, aliveBeIds);
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException ie) {
-                LOG.info("schema change job sleep wait InterruptedException: ", ie);
-            }
-        }
 
         // write edit log
         Env.getCurrentEnv().getEditLog().logAlterJob(this);
@@ -553,6 +539,9 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
             }
             return;
         }
+        long maxWalId = Env.getCurrentGlobalTransactionMgr()
+                .getTransactionIDGenerator().getNextTransactionId();
+        waitWalFinished(maxWalId);
         /*
          * all tasks are finished. check the integrity.
          * we just check whether all new replicas are healthy.
@@ -598,7 +587,6 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
                     } // end for tablets
                 }
             } // end for partitions
-
             // all partitions are good
             onFinished(tbl);
         } finally {
@@ -615,6 +603,27 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
         changeTableState(dbId, tableId, OlapTableState.NORMAL);
         LOG.info("set table's state to NORMAL, table id: {}, job id: {}", tableId, jobId);
         Env.getCurrentEnv().getGroupCommitManager().setStatus(tableId, SchemaChangeStatus.NORMAL);
+    }
+
+    private void waitWalFinished(long maxWalId) {
+        // wait wal done here
+        Env.getCurrentEnv().getGroupCommitManager().setStatus(tableId, SchemaChangeStatus.BLOCK);
+        LOG.info("block table {}", tableId);
+        List<Long> aliveBeIds = Env.getCurrentSystemInfo().getAllBackendIds(true);
+        boolean walFinished = Env.getCurrentEnv().getGroupCommitManager()
+                .isPreviousWalFinished(tableId, maxWalId, aliveBeIds);
+        while (!walFinished) {
+            LOG.info("wai for wal queue size to be empty");
+            walFinished = Env.getCurrentEnv().getGroupCommitManager()
+                    .isPreviousWalFinished(tableId, watershedTxnId, aliveBeIds);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ie) {
+                LOG.info("schema change job sleep wait for wal InterruptedException: ", ie);
+            }
+        }
+        Env.getCurrentEnv().getGroupCommitManager().setStatus(tableId, SchemaChangeStatus.NORMAL);
+        LOG.info("release table {}", tableId);
     }
 
     private void onFinished(OlapTable tbl) {
@@ -796,7 +805,6 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
 
             // set table state
             olapTable.setState(OlapTableState.SCHEMA_CHANGE);
-            Env.getCurrentEnv().getGroupCommitManager().setStatus(tableId, SchemaChangeStatus.BLOCK);
         } finally {
             olapTable.writeUnlock();
         }
@@ -804,20 +812,6 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
         this.watershedTxnId = replayedJob.watershedTxnId;
         jobState = JobState.WAITING_TXN;
         LOG.info("replay pending schema change job: {}, table id: {}", jobId, tableId);
-        // wait wal done here
-        List<Long> aliveBeIds = Env.getCurrentSystemInfo().getAllBackendIds(true);
-        boolean walFinished = Env.getCurrentEnv().getGroupCommitManager()
-                .isPreviousWalFinished(tableId, watershedTxnId, aliveBeIds);
-        while (!walFinished) {
-            LOG.info("wai for wal queue size to be empty");
-            walFinished = Env.getCurrentEnv().getGroupCommitManager()
-                    .isPreviousWalFinished(tableId, watershedTxnId, aliveBeIds);
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException ie) {
-                LOG.info("schema change job sleep wait InterruptedException: ", ie);
-            }
-        }
     }
 
     /**
@@ -849,6 +843,7 @@ public class SchemaChangeJobV2 extends AlterJobV2 {
         if (db != null) {
             OlapTable tbl = (OlapTable) db.getTableNullable(tableId);
             if (tbl != null) {
+                waitWalFinished(watershedTxnId);
                 tbl.writeLock();
                 try {
                     onFinished(tbl);
