@@ -1589,9 +1589,10 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
 
         if (txnOperation.equalsIgnoreCase("commit")) {
-            long timeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs() / 2 : 5000;
+            long commitTimeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs()
+                    : Config.commit_timeout_default_seconds * 1000;
             Env.getCurrentGlobalTransactionMgr()
-                    .commitTransaction2PC(database, tableList, request.getTxnId(), timeoutMs);
+                    .commitTransaction2PC(database, tableList, request.getTxnId(), commitTimeoutMs);
         } else if (txnOperation.equalsIgnoreCase("abort")) {
             Env.getCurrentGlobalTransactionMgr().abortTransaction2PC(database.getId(), request.getTxnId(), tableList);
         } else {
@@ -1686,13 +1687,13 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                     + request.isSetDbId() + " id: " + Long.toString(request.isSetDbId() ? request.getDbId() : 0)
                     + " fullDbName: " + fullDbName);
         }
-        long timeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs() / 2
-                : Config.try_commit_lock_timeout_seconds * 1000;
+        long commitTimeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs()
+                : Config.commit_timeout_default_seconds * 1000;
         List<Table> tables = queryLoadCommitTables(request, db);
         return Env.getCurrentGlobalTransactionMgr()
                 .commitAndPublishTransaction(db, tables, request.getTxnId(),
-                        TabletCommitInfo.fromThrift(request.getCommitInfos()), timeoutMs,
-                        TxnCommitAttachment.fromThrift(request.txnCommitAttachment));
+                        TabletCommitInfo.fromThrift(request.getCommitInfos()), commitTimeoutMs,
+                        TxnCommitAttachment.fromThrift(request.txnCommitAttachment), true);
     }
 
     @Override
