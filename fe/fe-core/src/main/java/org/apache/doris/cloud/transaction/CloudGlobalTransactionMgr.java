@@ -632,7 +632,9 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
         getDeleteBitmapUpdateLock(tableToPartitions, transactionId, tableToTabletList, tabletToTabletMeta,
                 baseCompactionCnts, cumulativeCompactionCnts, cumulativePoints, commitTimeoutMs, commitOnBe);
         stopWatch.stop();
-        long remainingTimeMs = commitTimeoutMs - stopWatch.getTime();
+        // remainingTimeMs should be less than actual remaining time
+        // to avoid commit rpc send twice because of rpc timeout
+        long remainingTimeMs = commitTimeoutMs - stopWatch.getTime() - 1000;
         Map<Long, Long> partitionVersions = getPartitionVersions(partitions);
 
         Map<Long, List<TCalcDeleteBitmapPartitionInfo>> backendToPartitionInfos = getCalcDeleteBitmapInfo(

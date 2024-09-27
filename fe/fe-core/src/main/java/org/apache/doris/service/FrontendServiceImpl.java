@@ -1800,8 +1800,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
 
         // Step 4: get timeout
-        long timeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs() / 2
-                : Config.try_commit_lock_timeout_seconds * 1000;
+        long commitTimeoutMs = request.isSetThriftRpcTimeoutMs() ? request.getThriftRpcTimeoutMs()
+                : Config.commit_timeout_default_seconds * 1000;
 
         // Step 5: commit and publish
         if (request.isSetTxnInsert() && request.isTxnInsert()) {
@@ -1819,13 +1819,13 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             }
             transactionState.setSubTxnIds(subTxnIds);
             return Env.getCurrentGlobalTransactionMgr().commitAndPublishTransaction(db, request.getTxnId(),
-                    subTransactionStates, timeoutMs);
+                    subTransactionStates, commitTimeoutMs);
         } else {
             return Env.getCurrentGlobalTransactionMgr()
                     .commitAndPublishTransaction(db, tableList,
                             request.getTxnId(),
-                            TabletCommitInfo.fromThrift(request.getCommitInfos()), timeoutMs,
-                            TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()));
+                            TabletCommitInfo.fromThrift(request.getCommitInfos()), commitTimeoutMs,
+                            TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()), true);
         }
     }
 
