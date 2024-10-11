@@ -1385,6 +1385,7 @@ message UpdateDeleteBitmapRequest {
     // Serialized roaring bitmaps indexed with {rowset_id, segment_id, version}
     repeated bytes segment_delete_bitmaps = 10;
     optional bool unlock = 11;
+    optional bool is_load = 12;
 }
 
 message UpdateDeleteBitmapResponse {
@@ -1443,6 +1444,7 @@ message GetDeleteBitmapUpdateLockRequest {
     optional int64 expiration = 6;
     optional bool require_compaction_stats = 7 [default = false];
     repeated TabletIndexPB tablet_indexes = 8;
+    optional int64 tablet_id = 9;
 }
 
 message GetDeleteBitmapUpdateLockResponse {

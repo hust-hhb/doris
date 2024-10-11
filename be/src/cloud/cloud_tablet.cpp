@@ -688,8 +688,18 @@ Status CloudTablet::save_delete_bitmap(const TabletTxnInfo* txn_info, int64_t tx
         }
     }
 
-    RETURN_IF_ERROR(_engine.meta_mgr().update_delete_bitmap(
-            *this, txn_id, COMPACTION_DELETE_BITMAP_LOCK_ID, new_delete_bitmap.get()));
+//    auto uuid = UUIDGenerator::instance()->next_uuid();
+//    std::stringstream ss;
+//    ss << uuid;
+//    auto uuid_str = ss.str();
+//    int64_t initiator = HashUtil::hash64(uuid_str.data(), uuid_str.size(), 0) &
+//                        std::numeric_limits<int64_t>::max();
+
+    //get tablet lock
+    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*this, txn_id, -1));
+
+    RETURN_IF_ERROR(_engine.meta_mgr().update_delete_bitmap(*this, txn_id, -1,
+                                                            new_delete_bitmap.get(), true));
 
     // store the delete bitmap with sentinel marks in txn_delete_bitmap_cache because if the txn is retried for some reason,
     // it will use the delete bitmap from txn_delete_bitmap_cache when re-calculating the delete bitmap, during which it will do
@@ -790,8 +800,8 @@ Status CloudTablet::calc_delete_bitmap_for_compaction(
     }
 
     // 3. store delete bitmap
-    RETURN_IF_ERROR(_engine.meta_mgr().update_delete_bitmap(*this, -1, initiator,
-                                                            output_rowset_delete_bitmap.get()));
+    RETURN_IF_ERROR(_engine.meta_mgr().update_delete_bitmap(
+            *this, COMPACTION_DELETE_BITMAP_LOCK_ID, initiator, output_rowset_delete_bitmap.get()));
     return Status::OK();
 }
 
