@@ -698,8 +698,14 @@ Status CloudTablet::save_delete_bitmap(const TabletTxnInfo* txn_info, int64_t tx
     //get tablet lock
     RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*this, txn_id, -1));
 
-    RETURN_IF_ERROR(_engine.meta_mgr().update_delete_bitmap(*this, txn_id, -1,
-                                                            new_delete_bitmap.get(), true));
+    auto st = _engine.meta_mgr().update_delete_bitmap(*this, txn_id, -1, new_delete_bitmap.get(),
+                                                      true);
+
+    RETURN_IF_ERROR(_engine.meta_mgr().remove_delete_bitmap_update_lock(*this, txn_id, -1));
+    if (!st.ok()) {
+        LOG(WARNING) << "update delete bitmap fail,txn=" << txn_id << " st=" << st.to_string();
+        return st;
+    }
 
     // store the delete bitmap with sentinel marks in txn_delete_bitmap_cache because if the txn is retried for some reason,
     // it will use the delete bitmap from txn_delete_bitmap_cache when re-calculating the delete bitmap, during which it will do
