@@ -1080,6 +1080,7 @@ Status CloudMetaMgr::update_delete_bitmap_without_lock(const CloudTablet& tablet
 
 Status CloudMetaMgr::get_delete_bitmap_update_lock(const CloudTablet& tablet, int64_t lock_id,
                                                    int64_t initiator) {
+    OlapStopWatch watch;
     VLOG_DEBUG << "get_delete_bitmap_update_lock , tablet_id: " << tablet.tablet_id()
                << ",lock_id:" << lock_id;
     GetDeleteBitmapUpdateLockRequest req;
@@ -1107,6 +1108,8 @@ Status CloudMetaMgr::get_delete_bitmap_update_lock(const CloudTablet& tablet, in
                      << "ms : " << res.status().msg();
         bthread_usleep(duration_ms * 1000);
     } while (++retry_times <= 100);
+    LOG(INFO) << "finish to get_delete_bitmap_update_lock , tablet_id: " << tablet.tablet_id()
+              << ",lock_id:" << lock_id << ", cost(us): " << watch.get_elapse_time_us();
     return st;
 }
 
