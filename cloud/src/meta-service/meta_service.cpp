@@ -1911,27 +1911,6 @@ void MetaServiceImpl::update_delete_bitmap(google::protobuf::RpcController* cont
     LOG(INFO) << "update_delete_bitmap tablet_id=" << tablet_id << " lock_id=" << request->lock_id()
               << " rowset_num=" << request->rowset_ids_size() << " total_key=" << total_key
               << " total_size=" << total_size << " unlock=" << unlock << " is_load=" << is_load;
-//    if (is_load) {
-//        TxnErrorCode err = txn_kv_->create_txn(&txn);
-//        if (err != TxnErrorCode::TXN_OK) {
-//            code = cast_as<ErrCategory::CREATE>(err);
-//            msg = "failed to init txn";
-//            return;
-//        }
-//        std::string lock_key = meta_delete_bitmap_update_lock_key({instance_id, tablet_id, -1});
-//        bool success = check_and_remove_delete_bitmap_update_lock(code, msg, ss, txn, instance_id,
-//                                                                  tablet_id, request->lock_id(),
-//                                                                  request->initiator(), lock_key);
-//        if (success) {
-//            LOG(INFO) << "remove delete bitmap tablet lock tablet_id=" << tablet_id
-//                      << " lock_id=" << request->lock_id() << ", key=" << hex(lock_key)
-//                      << ", initiator=" << request->initiator();
-//        } else {
-//            LOG(WARNING) << "fail to remove delete bitmap tablet lock tablet_id=" << tablet_id
-//                         << " lock_id=" << request->lock_id() << ", key=" << hex(lock_key)
-//                         << ", initiator=" << request->initiator();
-//        }
-//    }
 }
 
 void MetaServiceImpl::get_delete_bitmap(google::protobuf::RpcController* controller,
