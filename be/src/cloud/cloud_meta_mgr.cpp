@@ -565,7 +565,7 @@ bool CloudMetaMgr::sync_tablet_delete_bitmap_by_cache(CloudTablet* tablet, int64
     std::set<int64_t> txn_processed;
     for (auto& rs_meta : rs_metas) {
         auto txn_id = rs_meta.txn_id();
-        LOG(INFO) << "rowset=" << rs_meta.rowset_id().to_string() << ",txn_id=" << txn_id;
+        LOG(INFO) << "rowset=" << rs_meta.rowset_id() << ",txn_id=" << txn_id;
         if (txn_processed.find(txn_id) != txn_processed.end()) {
             continue;
         }
