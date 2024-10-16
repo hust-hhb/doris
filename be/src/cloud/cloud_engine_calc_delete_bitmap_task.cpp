@@ -59,10 +59,58 @@ void CloudEngineCalcDeleteBitmapTask::add_succ_tablet_id(int64_t tablet_id) {
     _succ_tablet_ids->push_back(tablet_id);
 }
 
+Status CloudEngineCalcDeleteBitmapTask::get_delete_bitmap_lock(std::vector<int64_t>& tablet_id_vec,
+                                                               int64_t transaction_id,int64_t& lock_index) {
+    for (auto& tablet_id : tablet_id_vec) {
+        auto base_tablet = DORIS_TRY(_engine.get_tablet(tablet_id));
+        std::shared_ptr<CloudTablet> tablet = std::dynamic_pointer_cast<CloudTablet>(base_tablet);
+        auto st = _engine.meta_mgr().get_delete_bitmap_update_lock(*tablet, transaction_id, -1);
+        if (st.ok()) {
+            LOG(WARNING) << "get_delete_bitmap_update_lock fail,tablet=" << tablet_id
+                         << ",txn=" << transaction_id;
+            return st;
+        }
+        lock_index++;
+    }
+    return Status::OK();
+}
+
+Status CloudEngineCalcDeleteBitmapTask::remove_delete_bitmap_lock(
+        std::vector<int64_t>& tablet_id_vec, int64_t transaction_id, int64_t& lock_index) {
+    int cur_index = 0;
+    for (auto& tablet_id : tablet_id_vec) {
+        if (cur_index >= lock_index) {
+            break;
+        }
+        auto base_tablet = DORIS_TRY(_engine.get_tablet(tablet_id));
+        std::shared_ptr<CloudTablet> tablet = std::dynamic_pointer_cast<CloudTablet>(base_tablet);
+        auto st = _engine.meta_mgr().remove_delete_bitmap_update_lock(*tablet, transaction_id, -1);
+        if (!st.ok()) {
+            LOG(WARNING) << "get_delete_bitmap_update_lock fail,tablet=" << tablet_id
+                         << ",txn=" << transaction_id << ",st=" << st.to_string();
+        }
+        cur_index++;
+    }
+    return Status::OK();
+}
+
 Status CloudEngineCalcDeleteBitmapTask::execute() {
     int64_t transaction_id = _cal_delete_bitmap_req.transaction_id;
     OlapStopWatch watch;
-    VLOG_NOTICE << "begin to calculate delete bitmap. transaction_id=" << transaction_id;
+    LOG(INFO) << "begin to calculate delete bitmap. transaction_id=" << transaction_id;
+
+    // get lock
+//    std::vector<int64_t> tablet_id_vec;
+//    int64_t lock_index = 0;
+//    for (const auto& partition : _cal_delete_bitmap_req.partitions) {
+//        for (size_t i = 0; i < partition.tablet_ids.size(); i++) {
+//            tablet_id_vec.emplace_back(partition.tablet_ids[i]);
+//        }
+//    }
+//    auto get_lock_st = get_delete_bitmap_lock(tablet_id_vec, transaction_id, lock_index);
+//    if (!get_lock_st.ok()) {
+//        return get_delete_bitmap_lock(tablet_id_vec, transaction_id, lock_index);
+//    }
     std::unique_ptr<ThreadPoolToken> token =
             _engine.calc_tablet_delete_bitmap_task_thread_pool().new_token(
                     ThreadPool::ExecutionMode::CONCURRENT);

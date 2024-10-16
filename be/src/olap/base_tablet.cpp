@@ -1535,8 +1535,10 @@ void BaseTablet::calc_compaction_output_rowset_delete_bitmap(
                 auto cur_version = std::get<2>(iter->first);
                 for (auto index = iter->second.begin(); index != iter->second.end(); ++index) {
                     src.row_id = *index;
+                    LOG(INFO) << "now check src location: |" << src.rowset_id << "|"
+                              << src.segment_id << "|" << src.row_id << ",version:" << cur_version;
                     if (rowid_conversion.get(src, &dst) != 0) {
-                        VLOG_CRITICAL << "Can't find rowid, may be deleted by the delete_handler, "
+                        LOG(INFO) << "Can't find rowid, may be deleted by the delete_handler, "
                                       << " src loaction: |" << src.rowset_id << "|"
                                       << src.segment_id << "|" << src.row_id
                                       << " version: " << cur_version;
@@ -1545,7 +1547,7 @@ void BaseTablet::calc_compaction_output_rowset_delete_bitmap(
                         }
                         continue;
                     }
-                    VLOG_DEBUG << "calc_compaction_output_rowset_delete_bitmap dst location: |"
+                    LOG(INFO) << "calc_compaction_output_rowset_delete_bitmap dst location: |"
                                << dst.rowset_id << "|" << dst.segment_id << "|" << dst.row_id
                                << " src location: |" << src.rowset_id << "|" << src.segment_id
                                << "|" << src.row_id << " start version: " << start_version

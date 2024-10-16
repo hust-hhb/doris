@@ -764,6 +764,14 @@ Status CloudTablet::calc_delete_bitmap_for_compaction(
                         "cumulative compaction: the merged rows({}), the filtered rows({}) is not "
                         "equal to missed rows({}) in rowid conversion, tablet_id: {}, table_id:{}",
                         merged_rows, filtered_rows, missed_rows_size, tablet_id(), table_id());
+                LOG(INFO) << "tablet=" << tablet_id() << ",delete_bitmap size="
+                          << tablet_meta()->delete_bitmap().delete_bitmap.size();
+                for (auto it = tablet_meta()->delete_bitmap().delete_bitmap.begin();
+                     it != tablet_meta()->delete_bitmap().delete_bitmap.end(); it++) {
+                    LOG(INFO) << "key=" << std::get<0>(it->first) << "|" << std::get<1>(it->first)
+                              << "|" << std::get<2>(it->first)
+                              << ",value=" << it->second.toString();
+                }
                 if (config::enable_mow_compaction_correctness_check_core) {
                     CHECK(false) << err_msg;
                 } else {

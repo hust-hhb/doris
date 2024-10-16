@@ -413,7 +413,7 @@ Status CloudMetaMgr::sync_tablet_rowsets(CloudTablet* tablet, bool warmup_delta_
             req.set_cumulative_point(tablet->cumulative_layer_point());
         }
         req.set_end_version(-1);
-        VLOG_DEBUG << "send GetRowsetRequest: " << req.ShortDebugString();
+        LOG(INFO) << "send GetRowsetRequest: " << req.ShortDebugString();
 
         stub->get_rowset(&cntl, &req, &resp, nullptr);
         int64_t latency = cntl.latency_us();
@@ -565,6 +565,7 @@ bool CloudMetaMgr::sync_tablet_delete_bitmap_by_cache(CloudTablet* tablet, int64
     std::set<int64_t> txn_processed;
     for (auto& rs_meta : rs_metas) {
         auto txn_id = rs_meta.txn_id();
+        LOG(INFO) << "rowset=" << rs_meta.rowset_id().to_string() << ",txn_id=" << txn_id;
         if (txn_processed.find(txn_id) != txn_processed.end()) {
             continue;
         }
@@ -656,7 +657,7 @@ Status CloudMetaMgr::sync_tablet_delete_bitmap(CloudTablet* tablet, int64_t old_
         }
     }
 
-    VLOG_DEBUG << "send GetDeleteBitmapRequest: " << req.ShortDebugString();
+    LOG(INFO) << "send GetDeleteBitmapRequest: " << req.ShortDebugString();
     stub->get_delete_bitmap(&cntl, &req, &res, nullptr);
     if (cntl.Failed()) {
         return Status::RpcError("failed to get delete bitmap: {}", cntl.ErrorText());
