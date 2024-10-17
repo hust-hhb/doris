@@ -688,7 +688,7 @@ Status CloudTablet::save_delete_bitmap(const TabletTxnInfo* txn_info, int64_t tx
         }
     }
 
-    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*this, txn_id, -1));
+//    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*this, txn_id, -1));
 
     auto st = _engine.meta_mgr().update_delete_bitmap(*this, txn_id, -1, new_delete_bitmap.get(),
                                                       true);

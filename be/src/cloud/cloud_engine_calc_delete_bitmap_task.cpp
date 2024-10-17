@@ -188,6 +188,7 @@ Status CloudTabletCalcDeleteBitmapTask::handle() const {
         _engine_calc_delete_bitmap_task->add_error_tablet_id(_tablet_id, error_st);
         return error_st;
     }
+    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*tablet, _transaction_id, -1));
     int64_t max_version = tablet->max_version_unlocked();
     int64_t t2 = MonotonicMicros();
 
