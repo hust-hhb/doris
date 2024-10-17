@@ -437,9 +437,9 @@ Status VerticalHeapMergeIterator::next_batch(Block* block) {
     if (UNLIKELY(_record_rowids)) {
         _block_row_locations.resize(_block_row_max);
     }
-    int64_t index=0;
+//    int64_t index=0;
     while (_get_size(block) < _block_row_max) {
-        LOG(INFO) << "index=" << index << ",lock=" << block->dump_data();
+//        LOG(INFO) << "index=" << index << ",lock=" << block->dump_data();
         if (_merge_heap.empty()) {
             VLOG_NOTICE << "_merge_heap empty";
             break;
@@ -461,7 +461,7 @@ Status VerticalHeapMergeIterator::next_batch(Block* block) {
             if (pre_ctx) {
                 RETURN_IF_ERROR(pre_ctx->copy_rows(block));
                 pre_ctx = nullptr;
-                LOG(INFO) << "_merged_rows:" << _merged_rows << ",block=" << block->dump_data();
+//                LOG(INFO) << "_merged_rows:" << _merged_rows << ",block=" << block->dump_data();
             }
         } else {
             ctx->add_cur_batch();
@@ -505,7 +505,7 @@ Status VerticalHeapMergeIterator::next_batch(Block* block) {
             // Release ctx earlier to reduce resource consumed
             _ori_iter_ctx[cur_order].reset();
         }
-        index++;
+//        index++;
     }
     RETURN_IF_ERROR(_row_sources_buf->append(tmp_row_sources));
     if (!_merge_heap.empty()) {

@@ -175,7 +175,7 @@ void CloudTabletCalcDeleteBitmapTask::set_compaction_stats(int64_t ms_base_compa
 }
 
 Status CloudTabletCalcDeleteBitmapTask::handle() const {
-    VLOG_DEBUG << "start calculate delete bitmap on tablet " << _tablet_id;
+    LOG(INFO) << "start calculate delete bitmap on tablet " << _tablet_id;
     SCOPED_ATTACH_TASK(_mem_tracker);
     int64_t t1 = MonotonicMicros();
     auto base_tablet = DORIS_TRY(_engine.get_tablet(_tablet_id));
@@ -204,6 +204,7 @@ Status CloudTabletCalcDeleteBitmapTask::handle() const {
                _ms_cumulative_point > tablet->cumulative_layer_point();
     };
     if (_version != max_version + 1 || should_sync_rowsets_produced_by_compaction()) {
+        LOG(INFO) << "CloudTabletCalcDeleteBitmapTask,tablet_id=" << _tablet_id << ",sync_rowsets";
         auto sync_st = tablet->sync_rowsets();
         if (!sync_st.ok()) {
             LOG(WARNING) << "failed to sync rowsets. tablet_id=" << _tablet_id
@@ -280,6 +281,8 @@ Status CloudTabletCalcDeleteBitmapTask::handle() const {
     } else {
         status = CloudTablet::update_delete_bitmap(tablet, &txn_info, _transaction_id,
                                                    txn_expiration);
+        LOG(INFO) << "after load update delete bitmap,sync rowset";
+        RETURN_IF_ERROR(tablet->sync_rowsets());
         update_delete_bitmap_time_us = MonotonicMicros() - t3;
     }
     if (status != Status::OK()) {
