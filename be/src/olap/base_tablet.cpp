@@ -1523,7 +1523,7 @@ void BaseTablet::calc_compaction_output_rowset_delete_bitmap(
     RowLocation src;
     RowLocation dst;
     for (auto& rowset : input_rowsets) {
-        LOG(INFO) << "input_rowsets:" << rowset;
+        LOG(INFO) << "input_rowsets:" << rowset->rowset_id();
         src.rowset_id = rowset->rowset_id();
         for (uint32_t seg_id = 0; seg_id < rowset->num_segments(); ++seg_id) {
             src.segment_id = seg_id;
