@@ -610,8 +610,8 @@ bool CloudMetaMgr::sync_tablet_delete_bitmap_by_cache(CloudTablet* tablet, int64
                                          bitmap_value);
                 }
             }
-            engine.txn_delete_bitmap_cache().remove_unused_tablet_txn_info(txn_id,
-                                                                           tablet->tablet_id());
+//            engine.txn_delete_bitmap_cache().remove_unused_tablet_txn_info(txn_id,
+//                                                                           tablet->tablet_id());
         } else {
             LOG(WARNING) << "failed to get tablet txn info. tablet_id=" << tablet->tablet_id()
                          << ", txn_id=" << txn_id << ", status=" << status;

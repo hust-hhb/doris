@@ -804,12 +804,14 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
             while (retryTime++ < Config.metaServiceRpcRetryTimes()) {
                 try {
                     response = MetaServiceProxy.getInstance().getDeleteBitmapUpdateLock(request);
-                    if (LOG.isDebugEnabled()) {
-                        LOG.debug("get delete bitmap lock, transactionId={}, Request: {}, Response: {}",
-                                transactionId, request, response);
-                    }
+                    // if (LOG.isDebugEnabled()) {
+                    LOG.info("get delete bitmap lock, transactionId={}, Request: {}, Response: {}",
+                            transactionId, request, response);
+                    // }
                     if (response.getStatus().getCode() != MetaServiceCode.LOCK_CONFLICT
-                            && response.getStatus().getCode() != MetaServiceCode.KV_TXN_CONFLICT) {
+                            && response.getStatus().getCode() != MetaServiceCode.KV_TXN_CONFLICT
+                            && response.getStatus().getCode()
+                            != MetaServiceCode.KV_TXN_CONFLICT_RETRY_EXCEEDED_MAX_TIMES) {
                         break;
                     }
                 } catch (Exception e) {
@@ -833,7 +835,8 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
                 LOG.warn("get delete bitmap lock failed, transactionId={}, for {} times, response:{}",
                         transactionId, retryTime, response);
                 if (response.getStatus().getCode() == MetaServiceCode.LOCK_CONFLICT
-                        || response.getStatus().getCode() == MetaServiceCode.KV_TXN_CONFLICT) {
+                        || response.getStatus().getCode() == MetaServiceCode.KV_TXN_CONFLICT
+                        || response.getStatus().getCode() == MetaServiceCode.KV_TXN_CONFLICT_RETRY_EXCEEDED_MAX_TIMES) {
                     // DELETE_BITMAP_LOCK_ERR will be retried on be
                     throw new UserException(InternalErrorCode.DELETE_BITMAP_LOCK_ERR,
                             "Failed to get delete bitmap lock due to confilct");

@@ -688,8 +688,6 @@ Status CloudTablet::save_delete_bitmap(const TabletTxnInfo* txn_info, int64_t tx
         }
     }
 
-//    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*this, txn_id, -1));
-
     auto st = _engine.meta_mgr().update_delete_bitmap(*this, txn_id, -1, new_delete_bitmap.get(),
                                                       true);
     LOG(INFO) << "tablet=" << tablet_id()
@@ -699,8 +697,6 @@ Status CloudTablet::save_delete_bitmap(const TabletTxnInfo* txn_info, int64_t tx
         LOG(INFO) << "key=" << std::get<0>(it->first) << "|" << std::get<1>(it->first) << "|"
                   << std::get<2>(it->first) << ",size=" << it->second.cardinality();
     }
-
-    RETURN_IF_ERROR(_engine.meta_mgr().remove_delete_bitmap_update_lock(*this, txn_id, -1));
     if (!st.ok()) {
         LOG(WARNING) << "update delete bitmap fail,txn=" << txn_id << " st=" << st.to_string();
         return st;

@@ -130,7 +130,10 @@ Status CloudEngineCalcDeleteBitmapTask::execute() {
                         partition.cumulative_points[i]);
             }
             auto submit_st = token->submit_func([=]() {
+                // get tablet lock
                 auto st = tablet_calc_delete_bitmap_ptr->handle();
+                // release tablet lock
+
                 if (!st.ok()) {
                     LOG(WARNING) << "handle calc delete bitmap fail, st=" << st.to_string();
                 }
@@ -188,7 +191,7 @@ Status CloudTabletCalcDeleteBitmapTask::handle() const {
         _engine_calc_delete_bitmap_task->add_error_tablet_id(_tablet_id, error_st);
         return error_st;
     }
-    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*tablet, _transaction_id, -1));
+//    RETURN_IF_ERROR(_engine.meta_mgr().get_delete_bitmap_update_lock(*tablet, _transaction_id, -1));
     int64_t max_version = tablet->max_version_unlocked();
     int64_t t2 = MonotonicMicros();
 
@@ -280,10 +283,12 @@ Status CloudTabletCalcDeleteBitmapTask::handle() const {
         LOG(INFO) << "tablet=" << _tablet_id << ",txn=" << _transaction_id
                   << ",publish_status=SUCCEED,not need to recalculate and update delete_bitmap.";
     } else {
+        RETURN_IF_ERROR(
+                _engine.meta_mgr().get_delete_bitmap_update_lock(*tablet, _transaction_id, -1));
         status = CloudTablet::update_delete_bitmap(tablet, &txn_info, _transaction_id,
                                                    txn_expiration);
-        LOG(INFO) << "after load update delete bitmap,sync rowset";
-        RETURN_IF_ERROR(tablet->sync_rowsets());
+        RETURN_IF_ERROR(
+                _engine.meta_mgr().remove_delete_bitmap_update_lock(*tablet, _transaction_id, -1));
         update_delete_bitmap_time_us = MonotonicMicros() - t3;
     }
     if (status != Status::OK()) {
